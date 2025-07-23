@@ -11,7 +11,7 @@ export const WalletContextProvider = ({ children }) => {
 
     const initializeWallet = useCallback(async () => {
         try {
-            const newWallet = new WalletClient('auto', 'localhost:3000');
+            const newWallet = new WalletClient('auto', 'localhost');
 
             const isConnected = await newWallet.isAuthenticated();
             if (!isConnected) {
@@ -34,7 +34,7 @@ export const WalletContextProvider = ({ children }) => {
     }, []);
 
     return (
-        <WalletContext.Provider value={{ userWallet, userPubKey }}>
+        <WalletContext.Provider value={{ userWallet, userPubKey, initializeWallet }}>
             {children}
         </WalletContext.Provider>
     );

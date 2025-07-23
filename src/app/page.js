@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { WalletClient } from "@bsv/sdk";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
+import { useWalletContext } from "../context/walletContext";
 
 export default function Home() {
   const [username, setUsername] = useState('');
@@ -15,14 +16,19 @@ export default function Home() {
   const [emailSent, setEmailSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
 
+  const { userWallet, initializeWallet } = useWalletContext();
+
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
 
   const handleGenerateCert = async () => {
     // Make cert with API
-    const wallet = new WalletClient("Auto", "localhost");
+    if (!userWallet) {
+      await initializeWallet();
+    }
+    const wallet = userWallet;
 
     const certResponse = await wallet.acquireCertificate({
-      type: Buffer.from("User").toString('base64'),
+      type: Buffer.from("CommonSource user identity").toString('base64'),
       fields: {
         username: username,
         residence: residence,
@@ -61,6 +67,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <button disabled={userWallet} onClick={initializeWallet}>Initialize wallet</button>
       <div className="w-full max-w-md">
         {emailVerified ? (
           <div className="bg-slate-800 rounded-lg p-8 shadow-xl">
