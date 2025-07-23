@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState } from "react";
-import { WalletClient } from "@bsv/sdk";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
 import { useWalletContext } from "../context/walletContext";
 

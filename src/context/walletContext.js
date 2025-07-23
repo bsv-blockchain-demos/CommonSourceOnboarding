@@ -2,6 +2,7 @@
 
 import { useContext, createContext, useState, useEffect, useCallback } from "react";
 import { WalletClient } from "@bsv/sdk";
+import { toast } from 'react-hot-toast';
 
 const WalletContext = createContext();
 
@@ -24,8 +25,18 @@ export const WalletContextProvider = ({ children }) => {
             // Only update state once everything is fetched
             setUserWallet(newWallet);
             setUserPubKey(identityKey);
+            toast.success('Wallet connected successfully', {
+                duration: 5000,
+                position: 'top-center',
+                id: 'wallet-connect-success',
+            });
         } catch (error) {
             console.error('Failed to initialize wallet:', error);
+            toast.error('Failed to connect wallet. \nTo save files to blockchain, please open a wallet client.', {
+                duration: 5000,
+                position: 'top-center',
+                id: 'wallet-connect-error',
+            });
         }
     }, []);
 
