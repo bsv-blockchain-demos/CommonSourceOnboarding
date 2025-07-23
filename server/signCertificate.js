@@ -1,7 +1,5 @@
-import { NextResponse } from "next/server";
-import { Certificate, createNonce, verifyNonce, PrivateKey, KeyDeriver, Utils, P2PKH } from "@bsv/sdk";
+import { Certificate, createNonce, verifyNonce, PrivateKey, KeyDeriver, Utils, P2PKH, WalletClient } from "@bsv/sdk";
 import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } from "@bsv/wallet-toolbox"
-import { useWalletContext } from "../../context/walletContext";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -14,24 +12,25 @@ const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY;
 //const SERVER_PUBLIC_KEY = process.env.SERVER_PUBLIC_KEY;
 const WALLET_STORAGE_URL = process.env.WALLET_STORAGE_URL;
 
-export async function POST(req) {
+export async function signCertificate(req, res) {
     try {
         // Body response from Metanet desktop walletclient
-        const body = await req.json();
+        const body = req.body;
         const { clientNonce, type, fields, masterKeyring } = body;
         console.log("body", body);
 
         // Get all wallet info
-        const { userWallet, userPubKey } = useWalletContext();
+        const userWallet = new WalletClient('auto', 'localhost');
+        const userPubKey = await userWallet.getPublicKey({ identityKey: true });
         const serverWallet = makeWallet(CHAIN === 'testnet' ? 'test' : 'main', WALLET_STORAGE_URL, SERVER_PRIVATE_KEY);
 
         if (!userWallet || !userPubKey) {
-            return NextResponse.json({ error: 'User wallet not found' }, { status: 400 });
+            return res.status(400).json({ error: 'User wallet not found' });
         }
         
         const valid = await verifyNonce(clientNonce, userWallet, userPubKey);
         if (!valid) {
-            return NextResponse.json({ error: 'Invalid nonce' }, { status: 400 });
+            return res.status(400).json({ error: 'Invalid nonce' });
         }
         const serverNonce = createNonce(serverWallet, userPubKey);
 
@@ -52,6 +51,8 @@ export async function POST(req) {
         });
         const serialNumber = Utils.toBase64(hmac);
 
+        const publicKeyForTx = await serverWallet.getPublicKey({ protocolID: [0, 'revocation'], keyID: "1"}).publicKey;
+
         // Creating certificate revocation tx
         const revocationTxid = await serverWallet.createAction({
             description: 'Certificate revocation',
@@ -59,7 +60,7 @@ export async function POST(req) {
                 {
                     outputDescription: 'Certificate revocation outpoint',
                     satoshis: 1,
-                    lockingScript: new P2PKH.lock(serverWallet.getPublicKey({ identityKey: true }).publicKey.toHash())
+                    lockingScript: new P2PKH.lock(Utils.toArray(publicKeyForTx, 'base64').toHash().toHex())
                 }
             ]
         });
@@ -78,10 +79,10 @@ export async function POST(req) {
         await signedCertificate.sign(serverWallet);
 
         console.log("signedCertificate", signedCertificate);
-        return NextResponse.json({ certificate: signedCertificate, serverNonce: serverNonce }, { status: 200 });
+        return res.json({ certificate: signedCertificate, serverNonce: serverNonce });
     } catch (error) {
         console.error(error);
-        return NextResponse.json({ error: error }, { status: 500 });
+        return res.status(500).json({ error: error });
     }
 }
 
@@ -100,3 +101,5 @@ async function makeWallet(chain, storageURL, privateKey) {
     await storageManager.addWalletStorageProvider(client);
     return wallet;
 }
+
+export default signCertificate;

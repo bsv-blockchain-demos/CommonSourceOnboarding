@@ -38,7 +38,7 @@ export default function Home() {
       },
       acquisitionProtocol: "issuance",
       certifier: serverPubKey,
-      certifierUrl: "localhost:3000/api/certificate",
+      certifierUrl: "http://localhost:8080",
     });
     console.log(certResponse);
   }
