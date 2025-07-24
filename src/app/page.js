@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
 import { useWalletContext } from "../context/walletContext";
+import { Utils } from "@bsv/sdk";
 
 export default function Home() {
   const [username, setUsername] = useState('');
@@ -27,7 +28,7 @@ export default function Home() {
     const wallet = userWallet;
 
     const certResponse = await wallet.acquireCertificate({
-      type: Buffer.from("CommonSource user identity").toString('base64'),
+      type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
       fields: {
         username: username,
         residence: residence,
