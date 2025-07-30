@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-// TODO Middleware
+// Middleware
 export async function POST(req) {
     const body = await req.json();
     console.log("body", body);

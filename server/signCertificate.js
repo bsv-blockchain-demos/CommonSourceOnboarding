@@ -114,6 +114,9 @@ export async function signCertificate(req, res) {
         await signedCertificate.sign(serverWallet);
 
         console.log("signedCertificate", signedCertificate);
+
+        // Save certificate in database
+        // EX: {subject: subject, serialNumber: serialNumber, certificate: signedCertificate, revocationTxid: revocation.txid}
         return res.json({ certificate: signedCertificate, serverNonce: serverNonce });
     } catch (error) {
         console.error(error);

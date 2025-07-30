@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
 import { useWalletContext } from "../context/walletContext";
 import { Utils } from "@bsv/sdk";
+import { toast } from 'react-hot-toast';
+import { useAuthContext } from "../context/authContext";
 
 export default function Home() {
   const [username, setUsername] = useState('');
@@ -15,8 +17,10 @@ export default function Home() {
   const [emailVerified, setEmailVerified] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
+  const [generated, setGenerated] = useState(false);
 
   const { userWallet, initializeWallet } = useWalletContext();
+  const { certificate, loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
 
@@ -42,27 +46,60 @@ export default function Home() {
       certifierUrl: "http://localhost:8080",
     });
     console.log(certResponse);
+    setGenerated(true);
   }
 
   // For demo purpose we proceed as if the user is always validated
   const handleEmailVerify = async () => {
-    // const verifyRes = await verifyCode({ email, verificationCode });
-    // if (verifyRes.verificationStatus === false) {
-    //   return;
-    // }
+    const verifyRes = await verifyCode({ email, verificationCode });
+    if (verifyRes.verificationStatus === false) {
+      toast.error("Failed to verify code");
+      setEmailSent(false);
+      return;
+    }
 
     setEmailVerified(true);
     return;
   }
 
   const handleSendEmail = async () => {
-    // const emailRes = await sendEmailFunc({ email });
-    // if (emailRes.textSentStatus === false) {
-    //   return;
-    // }
+    const emailRes = await sendEmailFunc({ email });
+    if (emailRes.sentStatus === false) {
+      toast.error("Failed to send email");
+      return;
+    }
 
     setEmailSent(true);
     return;
+  }
+
+  const handleLogin = async () => {
+    await loginWithCertificate();
+  }
+  
+  if (generated && !certificate) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="absolute top-4 right-4">
+          <button
+            onClick={handleLogin}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Login
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (certificate) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="absolute top-4 right-4">
+          You are logged in
+        </div>
+      </div>
+    )
   }
 
   return (
