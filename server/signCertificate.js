@@ -11,6 +11,7 @@ import {
     Hash
 } from '@bsv/sdk'
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
+import { connectToMongo } from '../lib/mongo'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -117,6 +118,16 @@ export async function signCertificate(req, res) {
 
         // Save certificate in database
         // EX: {subject: subject, serialNumber: serialNumber, certificate: signedCertificate, revocationTxid: revocation.txid}
+        await connectToMongo();
+        
+        await usersCollection.updateOne({ _id: subject }, 
+            { $set: { 
+                signedCertificate: signedCertificate,
+                revocationTxid: revocation.txid,
+                serialNumber: serialNumber,
+            } },
+            { upsert: true }
+        );
         return res.json({ certificate: signedCertificate, serverNonce: serverNonce });
     } catch (error) {
         console.error(error);

@@ -49,7 +49,7 @@ export default function Home() {
     setGenerated(true);
   }
 
-  // For demo purpose we proceed as if the user is always validated
+  //Verify user by email
   const handleEmailVerify = async () => {
     const verifyRes = await verifyCode({ email, verificationCode });
     if (verifyRes.verificationStatus === false) {

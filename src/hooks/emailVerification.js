@@ -1,5 +1,6 @@
 import brevo from "@getbrevo/brevo"
 import dotenv from 'dotenv'
+import { connectToMongo } from '../lib/mongo'
 dotenv.config();
 
 // Set Brevo API
@@ -16,7 +17,15 @@ async function sendEmailFunc(req, res) {
     const code = Math.floor(100000 + Math.random() * 900000);
 
     // Save code in database
-    // EX: {userEmail: email, code: code, expirationTime: Date.now() + 60000}
+    await connectToMongo();
+    
+    await verifyCollection.updateOne({ email }, 
+        { $set: { 
+            code: code,
+            expirationTime: Date.now() + 60000,
+        } },
+        { upsert: true }
+    );
 
     // Construct email
     try {
@@ -44,11 +53,17 @@ async function verifyCode(req, res) {
     // Verify code that's saved under email
     // db EX: {userEmail: email, code: code, expirationTime: Date}
 
-    if (Date.now() > dbExpirationTime) {
+    await connectToMongo();
+    const dbCode = await verifyCollection.findOne({ email });
+    if (!dbCode) {
+        return res.json({ verificationStatus: false });
+    }
+    
+    if (Date.now() > dbCode.expirationTime) {
         return res.json({ verificationStatus: false });
     }
 
-    if (code !== dbCode) {
+    if (code !== dbCode.code) {
         return res.json({ verificationStatus: false });
     }
 
