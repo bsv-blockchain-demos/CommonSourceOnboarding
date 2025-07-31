@@ -1,14 +1,17 @@
 "use client"
 
 import { useContext, createContext, useState, useEffect, useCallback } from "react";
-import { WalletClient } from "@bsv/sdk";
+import { WalletClient, Utils } from "@bsv/sdk";
 import { toast } from 'react-hot-toast';
+
+const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
 
 const WalletContext = createContext();
 
 export const WalletContextProvider = ({ children }) => {
     const [userWallet, setUserWallet] = useState(null);
     const [userPubKey, setUserPubKey] = useState(null);
+    const [certificate, setCertificate] = useState(null);
 
     const initializeWallet = useCallback(async () => {
         try {
@@ -20,11 +23,11 @@ export const WalletContextProvider = ({ children }) => {
                 return;
             }
 
-            const identityKey = await newWallet.getPublicKey({ identityKey: true });
+            const { publicKey } = await newWallet.getPublicKey({ identityKey: true });
 
             // Only update state once everything is fetched
+            setUserPubKey(publicKey);
             setUserWallet(newWallet);
-            setUserPubKey(identityKey);
             toast.success('Wallet connected successfully', {
                 duration: 5000,
                 position: 'top-center',
@@ -44,8 +47,39 @@ export const WalletContextProvider = ({ children }) => {
         initializeWallet();
     }, []);
 
+    // Check user wallet for certificate of our type
+    useEffect(() => {
+        async function checkCertificate() {
+            if (!userWallet) return;
+
+            const certificate = await userWallet.listCertificates({
+                types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))],
+                certifiers: [serverPubKey],
+                limit: 1,
+            });
+            if (certificate.totalCertificates > 0) {
+                // save to db with api route
+                const response = await fetch('/save-certificate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ certificate: certificate.certificates[0], subject: userPubKey }),
+                });
+                console.log(response);
+                if (response.ok) {
+                    toast.success('Certificate saved successfully from wallet');
+                    setCertificate(certificate.certificates[0]);
+                } else {
+                    toast.error(`${response.error}`);
+                }
+            }
+        }
+        checkCertificate();
+    }, [userWallet]);
+
     return (
-        <WalletContext.Provider value={{ userWallet, userPubKey, initializeWallet }}>
+        <WalletContext.Provider value={{ userWallet, userPubKey, initializeWallet, certificate, setCertificate }}>
             {children}
         </WalletContext.Provider>
     );

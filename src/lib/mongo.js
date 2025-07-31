@@ -67,4 +67,4 @@ process.on('SIGINT', async () => {
   }
 });
 
-export default connectToMongo;
+export { connectToMongo, usersCollection, verifyCollection };

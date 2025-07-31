@@ -1,4 +1,4 @@
-import { connectToMongo } from "../../lib/mongo"
+import { connectToMongo, usersCollection } from "../../lib/mongo"
 import { NextResponse } from "next/server";
 
 export async function POST(req) {

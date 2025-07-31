@@ -11,7 +11,7 @@ import {
     Hash
 } from '@bsv/sdk'
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
-import { connectToMongo } from '../lib/mongo'
+import { connectToMongo, usersCollection } from '../lib/mongo'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -119,12 +119,15 @@ export async function signCertificate(req, res) {
         // Save certificate in database
         // EX: {subject: subject, serialNumber: serialNumber, certificate: signedCertificate, revocationTxid: revocation.txid}
         await connectToMongo();
+
+        const existingCertificate = await usersCollection.findOne({ _id: subject });
+        if (existingCertificate) {
+            return res.json({ error: 'User already has a certificate' });
+        }
         
         await usersCollection.updateOne({ _id: subject }, 
             { $set: { 
                 signedCertificate: signedCertificate,
-                revocationTxid: revocation.txid,
-                serialNumber: serialNumber,
             } },
             { upsert: true }
         );

@@ -19,8 +19,8 @@ export default function Home() {
   const [verificationCode, setVerificationCode] = useState('');
   const [generated, setGenerated] = useState(false);
 
-  const { userWallet, initializeWallet } = useWalletContext();
-  const { certificate, loginWithCertificate } = useAuthContext();
+  const { userWallet, initializeWallet, certificate } = useWalletContext();
+  const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
 
@@ -51,7 +51,7 @@ export default function Home() {
 
   //Verify user by email
   const handleEmailVerify = async () => {
-    const verifyRes = await verifyCode({ email, verificationCode });
+    const verifyRes = await verifyCode(email, verificationCode);
     if (verifyRes.verificationStatus === false) {
       toast.error("Failed to verify code");
       setEmailSent(false);
@@ -63,7 +63,7 @@ export default function Home() {
   }
 
   const handleSendEmail = async () => {
-    const emailRes = await sendEmailFunc({ email });
+    const emailRes = await sendEmailFunc(email);
     if (emailRes.sentStatus === false) {
       toast.error("Failed to send email");
       return;
