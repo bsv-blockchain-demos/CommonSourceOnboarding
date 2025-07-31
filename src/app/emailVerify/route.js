@@ -1,7 +1,7 @@
 import { connectToMongo, verifyCollection } from "../../lib/mongo";
 import { NextResponse } from "next/server";
 
-async function POST(req) {
+export async function POST(req) {
     const body = await req.json();
     const { email, code, type } = body;
 
@@ -38,6 +38,11 @@ async function POST(req) {
             }
 
             return NextResponse.json({ verificationStatus: true }, { status: 200 });
+        }
+
+        if (type === 'delete-on-verified') {
+            await verifyCollection.deleteOne({ email });
+            return NextResponse.json({ status: 200 });
         }
     } catch (error) {
         console.log(error);

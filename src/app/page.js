@@ -58,6 +58,18 @@ export default function Home() {
       return;
     }
 
+    const res = await fetch('/api/emailVerify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, code, type: 'delete-on-verified' }),
+    });
+    if (!res.ok) {
+      toast.error("Something failed, please try again");
+      return;
+    }
+
     setEmailVerified(true);
     return;
   }
@@ -76,7 +88,7 @@ export default function Home() {
   const handleLogin = async () => {
     await loginWithCertificate();
   }
-  
+
   if (generated && !certificate) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">

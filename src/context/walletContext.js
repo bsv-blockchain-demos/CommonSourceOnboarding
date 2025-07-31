@@ -66,12 +66,15 @@ export const WalletContextProvider = ({ children }) => {
                     },
                     body: JSON.stringify({ certificate: certificate.certificates[0], subject: userPubKey }),
                 });
-                console.log(response);
+                const data = await response.json();
+                
                 if (response.ok) {
                     toast.success('Certificate saved successfully from wallet');
                     setCertificate(certificate.certificates[0]);
+                } else if (data.message === 'User already has a certificate') {
+                    setCertificate(certificate.certificates[0]);
                 } else {
-                    toast.error(`${response.error}`);
+                    toast.error(`${data.message}`);
                 }
             }
         }

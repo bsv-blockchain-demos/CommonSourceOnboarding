@@ -9,7 +9,7 @@ export async function POST(request) {
 
     const existingCertificate = await usersCollection.findOne({ _id: subject });
     if (existingCertificate) {
-        return NextResponse.json({ error: 'User already has a certificate' }, { status: 400 });
+        return NextResponse.json({ message: 'User already has a certificate' }, { status: 400 });
     }
     
     const dbCertificate = await usersCollection.updateOne({ _id: subject }, 
@@ -17,7 +17,7 @@ export async function POST(request) {
         { upsert: true });
 
     if (!dbCertificate) {
-        return NextResponse.json({ error: 'Failed to save certificate' }, { status: 500 });
+        return NextResponse.json({ message: 'Failed to save certificate' }, { status: 500 });
     }
 
     return NextResponse.json({ message: 'Certificate saved successfully' }, { status: 200 });
