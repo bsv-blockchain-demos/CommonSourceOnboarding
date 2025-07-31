@@ -6,9 +6,6 @@ let mailer = new TransactionalEmailsApi();
 
 mailer.authentications.apiKey.apiKey = brevoAPIKey;
 
-// mailer = new brevoAPIKey.TransactionalEmailsApi();
-// let sendSmtpEmail = new brevoAPIKey.SendSmtpEmail();
-
 async function sendEmailFunc(email) {
     const code = Math.floor(100000 + Math.random() * 900000);
 

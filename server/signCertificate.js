@@ -117,7 +117,7 @@ export async function signCertificate(req, res) {
         console.log("signedCertificate", signedCertificate);
 
         // Save certificate in database
-        // EX: {subject: subject, serialNumber: serialNumber, certificate: signedCertificate, revocationTxid: revocation.txid}
+        // EX: {subject: subject, certificate: signedCertificate}
         await connectToMongo();
 
         const existingCertificate = await usersCollection.findOne({ _id: subject });

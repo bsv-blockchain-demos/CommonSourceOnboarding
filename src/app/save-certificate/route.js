@@ -7,11 +7,13 @@ export async function POST(request) {
 
     await connectToMongo();
 
+    // Check for existing certificate
     const existingCertificate = await usersCollection.findOne({ _id: subject });
     if (existingCertificate) {
         return NextResponse.json({ message: 'User already has a certificate' }, { status: 400 });
     }
     
+    // Save certificate to DB if user doesn't have one
     const dbCertificate = await usersCollection.updateOne({ _id: subject }, 
         { $set: { signedCertificate: certificate } }, 
         { upsert: true });

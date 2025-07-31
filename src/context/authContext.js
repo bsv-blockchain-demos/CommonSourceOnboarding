@@ -8,6 +8,7 @@ const AuthContext = createContext();
 export const AuthContextProvider = ({ children }) => {
   const { setCertificate, userWallet } = useWalletContext();
 
+  // Lets the user login with their certificate if it's saved in the DB
   const loginWithCertificate = useCallback(async () => {
     if (!userWallet) return;
 

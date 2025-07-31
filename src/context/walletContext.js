@@ -13,6 +13,7 @@ export const WalletContextProvider = ({ children }) => {
     const [userPubKey, setUserPubKey] = useState(null);
     const [certificate, setCertificate] = useState(null);
 
+    // Initialize the user's wallet
     const initializeWallet = useCallback(async () => {
         try {
             const newWallet = new WalletClient('auto', 'localhost');
@@ -58,7 +59,7 @@ export const WalletContextProvider = ({ children }) => {
                 limit: 1,
             });
             if (certificate.totalCertificates > 0) {
-                // save to db with api route
+                // save to db with api route if it exists
                 const response = await fetch('/save-certificate', {
                     method: 'POST',
                     headers: {
@@ -68,6 +69,8 @@ export const WalletContextProvider = ({ children }) => {
                 });
                 const data = await response.json();
                 
+                // On successful save, set the certificate to log in the user
+                // If the user already has a certificate, set the certificate to log in the user
                 if (response.ok) {
                     toast.success('Certificate saved successfully from wallet');
                     setCertificate(certificate.certificates[0]);

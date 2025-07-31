@@ -9,6 +9,7 @@ export async function POST(req) {
         return NextResponse.json({ certificate: null });
     }
     
+    // Get user info from DB
     await connectToMongo();
     const dbCertificate = await usersCollection.findOne({ _id: subject });
 

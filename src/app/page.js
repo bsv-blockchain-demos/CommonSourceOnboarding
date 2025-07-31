@@ -58,6 +58,7 @@ export default function Home() {
       return;
     }
 
+    // On successful verification, delete the email from the database
     const res = await fetch('/api/emailVerify', {
       method: 'POST',
       headers: {
@@ -74,6 +75,7 @@ export default function Home() {
     return;
   }
 
+  // Send email with verification code
   const handleSendEmail = async () => {
     const emailRes = await sendEmailFunc(email);
     if (emailRes.sentStatus === false) {
