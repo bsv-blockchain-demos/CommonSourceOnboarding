@@ -7,7 +7,7 @@ const brevoAPIKey = process.env.BREVO_API_KEY;
 let mailer = new TransactionalEmailsApi();
 console.log(brevoAPIKey);
 
-const emailSender = process.env.NEXT_PUBLIC_EMAIL;
+const emailSender = process.env.SENDER_EMAIL;
 
 mailer.authentications.apiKey.apiKey = brevoAPIKey;
 
