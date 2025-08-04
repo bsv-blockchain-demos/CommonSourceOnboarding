@@ -6,6 +6,7 @@ import { useWalletContext } from "../context/walletContext";
 import { Utils } from "@bsv/sdk";
 import { toast } from 'react-hot-toast';
 import { useAuthContext } from "../context/authContext";
+import LoggedInPage from "../components/loggedInPage";
 
 export default function Home() {
   const [username, setUsername] = useState('');
@@ -109,9 +110,7 @@ export default function Home() {
   if (certificate) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="absolute top-4 right-4">
-          You are logged in
-        </div>
+        <LoggedInPage />
       </div>
     )
   }

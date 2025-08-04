@@ -1,16 +1,8 @@
-import { TransactionalEmailsApi, SendSmtpEmail } from "@getbrevo/brevo"
-
-// Set Brevo API
-const brevoAPIKey = process.env.NEXT_PUBLIC_BREVAPI_KEY;
-let mailer = new TransactionalEmailsApi();
-
-mailer.authentications.apiKey.apiKey = brevoAPIKey;
-
 async function sendEmailFunc(email) {
     const code = Math.floor(100000 + Math.random() * 900000);
-
+    try {
     // Save code in database
-    const dbresponse = await fetch('/api/emailVerify', {
+    const dbresponse = await fetch('/emailVerify', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -23,24 +15,11 @@ async function sendEmailFunc(email) {
         return { sentStatus: false };
     }
 
-    // Construct email
-    try {
-        let sendSmtpEmail = new SendSmtpEmail();
-        sendSmtpEmail.subject = "Code verification";
-        sendSmtpEmail.htmlContent = `<html><body><h1>Verification code: ${code}</h1></body></html>`;
-        sendSmtpEmail.sender = { "name": "CommonSource", "email": "example@example.com" };
-        sendSmtpEmail.to = [
-            { "email": email, "name": "User" }
-        ];
-        sendSmtpEmail.replyTo = { "email": email, "name": "User" };
-        sendSmtpEmail.headers = { "Code-Verification": code };
-        sendSmtpEmail.params = { "parameter": code };
-
-
-        const res = await mailer.sendTransacEmail(sendSmtpEmail);
-        return res.json();
+    
+    return { sentStatus: true };
     } catch (error) {
-        console.log(error);
+        console.log(error); 
+        return { sentStatus: false };
     }
 }
 
@@ -48,7 +27,7 @@ async function verifyCode(email, code) {
     // Verify code that's saved under email
     // db EX: {userEmail: email, code: code, expirationTime: Date}
 
-    const res = await fetch('/api/emailVerify', {
+    const res = await fetch('/emailVerify', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

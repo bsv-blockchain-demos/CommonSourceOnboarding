@@ -58,6 +58,9 @@ export const WalletContextProvider = ({ children }) => {
                 certifiers: [serverPubKey],
                 limit: 1,
             });
+            // In production check if this certificate is valid before proceeding
+            // EX: Check if the certificate field keys are the ones we expect
+
             if (certificate.totalCertificates > 0) {
                 // save to db with api route if it exists
                 const response = await fetch('/save-certificate', {
@@ -73,9 +76,9 @@ export const WalletContextProvider = ({ children }) => {
                 // If the user already has a certificate, set the certificate to log in the user
                 if (response.ok) {
                     toast.success('Certificate saved successfully from wallet');
-                    setCertificate(certificate.certificates[0]);
+                    //setCertificate(certificate.certificates[0]);
                 } else if (data.message === 'User already has a certificate') {
-                    setCertificate(certificate.certificates[0]);
+                    //setCertificate(certificate.certificates[0]);
                 } else {
                     toast.error(`${data.message}`);
                 }

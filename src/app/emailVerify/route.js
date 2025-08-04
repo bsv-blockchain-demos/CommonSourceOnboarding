@@ -1,5 +1,15 @@
 import { connectToMongo, verifyCollection } from "../../lib/mongo";
 import { NextResponse } from "next/server";
+import { TransactionalEmailsApi, SendSmtpEmail } from "@getbrevo/brevo";
+
+// Set Brevo API
+const brevoAPIKey = process.env.BREVO_API_KEY;
+let mailer = new TransactionalEmailsApi();
+console.log(brevoAPIKey);
+
+const emailSender = process.env.NEXT_PUBLIC_EMAIL;
+
+mailer.authentications.apiKey.apiKey = brevoAPIKey;
 
 export async function POST(req) {
     const body = await req.json();
@@ -10,7 +20,7 @@ export async function POST(req) {
         await connectToMongo();
 
         if (type === 'sendEmail') {
-            await verifyCollection.updateOne({ email },
+            const dbresponse = await verifyCollection.updateOne({ email },
                 {
                     $set: {
                         code: code,
@@ -19,6 +29,28 @@ export async function POST(req) {
                 },
                 { upsert: true }
             );
+
+            if (!dbresponse.acknowledged) {
+                return NextResponse.json({ status: 400 });
+            }
+
+            // Construct email
+            let sendSmtpEmail = new SendSmtpEmail();
+            sendSmtpEmail.subject = "Code verification";
+            sendSmtpEmail.htmlContent = `<html><body><h1>Verification code: ${code}</h1></body></html>`;
+            sendSmtpEmail.sender = { "name": "CommonSource", "email": emailSender };
+            sendSmtpEmail.to = [
+                { "email": email, "name": "User" }
+            ];
+            sendSmtpEmail.replyTo = { "email": email, "name": "User" };
+            sendSmtpEmail.headers = { "Code-Verification": code };
+            sendSmtpEmail.params = { "parameter": code };
+
+
+            const res = await mailer.sendTransacEmail(sendSmtpEmail);
+            if (!res.ok) {
+                return NextResponse.json({ status: 400 });
+            }
 
             return NextResponse.json({ status: 200 });
         }
