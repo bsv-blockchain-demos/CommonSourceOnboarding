@@ -1,10 +1,11 @@
 import React from "react";
 import { useWalletContext } from "../context/walletContext";
+import { toast } from 'react-hot-toast';
 
 // TODO add revocation button
 
 const LoggedInPage = () => {
-    const { certificate, userPubKey } = useWalletContext();
+    const { certificate, userPubKey, setCertificate } = useWalletContext();
 
     const handleRevoke = async () => {
         if (!certificate) return;
@@ -13,17 +14,21 @@ const LoggedInPage = () => {
         // After successful redemption delete the certificate from the database
         // and call relinquishCertificate
 
-        // const res = await fetch('/api/delete-certificate', {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //     },
-        //     body: JSON.stringify({ publicKey: userPubKey, certificate }),
-        // });
-        // if (!res.ok) {
-        //     toast.error("Something failed, please try again");
-        //     return;
-        // }
+        const res = await fetch('/delete-certificate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ publicKey: userPubKey, certificate }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            toast.error(data.message || "Something failed, please try again");
+            return;
+        }
+
+        toast.success("Certificate revoked successfully");
+        setCertificate(null);
     }
 
     return (
@@ -35,7 +40,7 @@ const LoggedInPage = () => {
                 <div className="space-y-4">
                     <button 
                         onClick={handleRevoke}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+                        className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900 hover:cursor-pointer"
                     >
                         Revoke Certificate
                     </button>

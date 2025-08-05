@@ -89,7 +89,7 @@ export async function signCertificate(req, res) {
                     outputDescription: 'Certificate revocation outpoint',
                     satoshis: 1,
                     lockingScript: Script.fromASM(`OP_SHA256 ${hashOfSerialNumber} OP_EQUAL`).toHex(),
-                    basket: 'certificate revocation',
+                    basket: `certificate revocation ${subject}`,
                     customInstructions: JSON.stringify({
                         serialNumber, // the unlockingScript is just the serialNumber
                     })

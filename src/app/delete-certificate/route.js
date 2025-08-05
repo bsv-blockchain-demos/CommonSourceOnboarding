@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectToMongo, usersCollection } from "../../lib/mongo";
-import { KeyDeriver, PrivateKey, Script, Utils, Hash, WalletClient } from "@bsv/sdk";
+import { KeyDeriver, PrivateKey, Script, Utils, WalletClient } from "@bsv/sdk";
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
 
 const CHAIN = process.env.CHAIN;
@@ -14,24 +14,36 @@ export async function POST(req) {
 
     console.log("certificate", certificate);
 
-    const { txid, outpoint } = certificate.revocationOutpoint.split('.');
-    console.log(txid);
-    console.log(outpoint);
-
-    // Create serial number hash for the unlocking script
-    const hashOfSerialNumber = Utils.toHex(Hash.sha256(certificate.serialNumber));
+    const revocationOutpoint = certificate.revocationOutpoint;
+    const [txid, outpoint] = revocationOutpoint.split('.');
 
     try {
         // Spend tx outpoint
         const wallet = await makeWallet(CHAIN, WALLET_STORAGE_URL, SERVER_PRIVATE_KEY);
+
+        // List the spendable tokens within this user's basket
+        const list = await wallet.listOutputs({
+            basket: `certificate revocation ${certificate.subject}`,
+            include: 'entire transactions',
+            limit: 1
+        })
+
+        if (list.outputs.length === 0) {
+            return NextResponse.json({ message: 'No revocation tokens found' }, { status: 400 });
+        }
+
+        console.log("list", list);
+
         const tx = await wallet.createAction({
             description: 'Certificate revocation',
+            inputBEEF: list.BEEF,
             inputs: [
                 {
                     inputDescription: 'Certificate revocation',
+                    basket: `certificate revocation ${certificate.subject}`,
                     txid,
-                    outpoint,
-                    unlockingScript: Script.fromASM(`OP_SHA256 ${hashOfSerialNumber} OP_EQUAL`).toHex(),
+                    outpoint: revocationOutpoint,
+                    unlockingScript: Script.fromASM(certificate.serialNumber).toHex(),
                 }
             ],
         });
