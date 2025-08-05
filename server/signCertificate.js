@@ -64,6 +64,26 @@ export async function signCertificate(req, res) {
         );
 
         console.log({ decryptedFields }) // PRODUCTION: actually check if we believe this before attesting to it
+        
+        // Check if this is a VC-structured certificate (new format)
+        const isVCCertificate = decryptedFields && 
+                               decryptedFields['@context'] && 
+                               decryptedFields.type && 
+                               decryptedFields.type.includes('VerifiableCredential');
+        
+        if (isVCCertificate) {
+            console.log('Processing W3C VC-structured certificate');
+            // For VC certificates, we could add additional validation here
+            // e.g., verify the VC structure, check DID format, etc.
+            
+            // Validate DID format in credentialSubject.id
+            const subjectDid = decryptedFields.credentialSubject?.id;
+            if (subjectDid && !subjectDid.startsWith('did:bsv:bsv_did:')) {
+                console.warn('Invalid DID format in credentialSubject:', subjectDid);
+            }
+        } else {
+            console.log('Processing legacy certificate format');
+        }
 
         // const valid = await verifyNonce(clientNonce, wallet, subject);
         // if (!valid) {
@@ -125,12 +145,25 @@ export async function signCertificate(req, res) {
             return res.json({ error: 'User already has a certificate' });
         }
         
+        // Prepare document for database
+        const documentToSave = { 
+            signedCertificate: signedCertificate,
+            isVCCertificate: isVCCertificate,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        // If it's a VC certificate, also extract the DID for easier lookup
+        if (isVCCertificate && decryptedFields.credentialSubject?.id) {
+            documentToSave.did = decryptedFields.credentialSubject.id;
+        }
+        
         await usersCollection.updateOne({ _id: subject }, 
-            { $set: { 
-                signedCertificate: signedCertificate,
-            } },
+            { $set: documentToSave },
             { upsert: true }
         );
+        
+        console.log(`Certificate saved for subject: ${subject}, VC format: ${isVCCertificate}`);
         return res.json({ certificate: signedCertificate, serverNonce: serverNonce });
     } catch (error) {
         console.error(error);
