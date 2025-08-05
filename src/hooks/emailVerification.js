@@ -2,7 +2,7 @@ async function sendEmailFunc(email) {
     const code = Math.floor(100000 + Math.random() * 900000);
     try {
     // Save code in database
-    const dbresponse = await fetch('/emailVerify', {
+    const response = await fetch('/emailVerify', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -10,11 +10,10 @@ async function sendEmailFunc(email) {
         body: JSON.stringify({ email, code, type: 'sendEmail' }),
     });
 
-    const dbresponseJson = await dbresponse.json();
-    if (dbresponseJson.status !== 200) {
+    const responseJson = await response.json();
+    if (responseJson.sentStatus === false) {
         return { sentStatus: false };
     }
-
     
     return { sentStatus: true };
     } catch (error) {
@@ -36,7 +35,11 @@ async function verifyCode(email, code) {
     });
 
     const resJson = await res.json();
-    return resJson;
+    if (resJson.verificationStatus === false) {
+        return { verificationStatus: false, message: resJson.message };
+    }
+    
+    return { verificationStatus: true, message: "Code verified" };
 }
 
 export { sendEmailFunc, verifyCode };

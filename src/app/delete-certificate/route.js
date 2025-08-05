@@ -1,4 +1,4 @@
-import NextResponse from "next/server";
+import { NextResponse } from "next/server";
 import { connectToMongo, usersCollection } from "../../lib/mongo";
 import { KeyDeriver, PrivateKey, Script, Utils, Hash, WalletClient } from "@bsv/sdk";
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'

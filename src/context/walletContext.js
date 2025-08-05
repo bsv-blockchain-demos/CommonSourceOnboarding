@@ -36,7 +36,7 @@ export const WalletContextProvider = ({ children }) => {
             });
         } catch (error) {
             console.error('Failed to initialize wallet:', error);
-            toast.error('Failed to connect wallet. \nTo save files to blockchain, please open a wallet client.', {
+            toast.error('Failed to connect wallet.', {
                 duration: 5000,
                 position: 'top-center',
                 id: 'wallet-connect-error',

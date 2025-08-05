@@ -53,19 +53,19 @@ export default function Home() {
   //Verify user by email
   const handleEmailVerify = async () => {
     const verifyRes = await verifyCode(email, verificationCode);
+
     if (verifyRes.verificationStatus === false) {
-      toast.error("Failed to verify code");
-      setEmailSent(false);
+      toast.error(verifyRes.message);
       return;
     }
 
     // On successful verification, delete the email from the database
-    const res = await fetch('/api/emailVerify', {
+    const res = await fetch('/emailVerify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, code, type: 'delete-on-verified' }),
+      body: JSON.stringify({ email, type: 'delete-on-verified' }),
     });
     if (!res.ok) {
       toast.error("Something failed, please try again");
@@ -78,8 +78,9 @@ export default function Home() {
 
   // Send email with verification code
   const handleSendEmail = async () => {
-    const emailRes = await sendEmailFunc(email);
-    if (emailRes.sentStatus === false) {
+    const emailResponse = await sendEmailFunc(email);
+    
+    if (!emailResponse?.sentStatus) {
       toast.error("Failed to send email");
       return;
     }
