@@ -21,14 +21,15 @@ export default function Home() {
   const [emailSent, setEmailSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [generated, setGenerated] = useState(false);
+  const [didCreated, setDidCreated] = useState(false);
 
   const { userWallet, initializeWallet, certificate } = useWalletContext();
-  const { createUserDid, createIdentityVCData } = useDidContext();
+  const { createUserDid, createIdentityVCData, userDid } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
 
-  const handleGenerateCert = async () => {
+  const handleCreateDid = async () => {
     try {
       // Initialize wallet if needed
       let wallet = userWallet;
@@ -40,12 +41,36 @@ export default function Home() {
         }
       }
 
-      // Step 1: Create user DID first
       console.log('Creating user DID...');
       const didResult = await createUserDid();
       toast.success('DID created successfully');
+      setDidCreated(true);
 
-      // Step 2: Create VC data structure for certificate
+    } catch (error) {
+      console.error('Error creating DID:', error);
+      toast.error(`Failed to create DID: ${error.message}`);
+    }
+  }
+
+  const handleGenerateCert = async () => {
+    try {
+      // Check if DID exists first
+      if (!userDid) {
+        toast.error('Please create DID first');
+        return;
+      }
+
+      // Initialize wallet if needed
+      let wallet = userWallet;
+      if (!wallet) {
+        console.log('Initializing wallet...');
+        wallet = await initializeWallet();
+        if (!wallet) {
+          throw new Error('Failed to initialize wallet');
+        }
+      }
+
+      // Create VC data structure for certificate
       console.log('Creating VC data structure...');
       const vcData = createIdentityVCData({
         username,
@@ -58,11 +83,22 @@ export default function Home() {
 
       console.log('VC Data created:', vcData);
 
-      // Step 3: Acquire certificate with VC data as fields
-      console.log('Acquiring certificate with VC data...');
+      // Acquire certificate with essential VC fields only
+      console.log('Acquiring certificate with essential VC data...');
+      const essentialData = {
+        did: vcData.credentialSubject.id,
+        username: vcData.credentialSubject.username,
+        email: vcData.credentialSubject.email,
+        issued: vcData.issuanceDate
+      };
+      
       const certResponse = await wallet.acquireCertificate({
         type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
-        fields: vcData, // Use VC structure instead of flat fields
+        fields: {
+          vcData: JSON.stringify(essentialData), // Only essential VC data
+          isVC: 'true', // Flag to indicate this is a VC certificate
+          fullVC: 'stored_separately' // Indicate full VC is stored in DB
+        },
         acquisitionProtocol: "issuance",
         certifier: serverPubKey,
         certifierUrl: "http://localhost:8080",
@@ -204,8 +240,24 @@ export default function Home() {
                 className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
               <button
+                onClick={handleCreateDid}
+                disabled={didCreated}
+                className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 mb-3 ${
+                  didCreated 
+                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {didCreated ? 'DID Created ✓' : 'Create DID'}
+              </button>
+              <button
                 onClick={handleGenerateCert}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+                disabled={!didCreated}
+                className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 ${
+                  !didCreated
+                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
               >
                 Generate Certificate
               </button>

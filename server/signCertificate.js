@@ -66,20 +66,26 @@ export async function signCertificate(req, res) {
         console.log({ decryptedFields }) // PRODUCTION: actually check if we believe this before attesting to it
         
         // Check if this is a VC-structured certificate (new format)
-        const isVCCertificate = decryptedFields && 
-                               decryptedFields['@context'] && 
-                               decryptedFields.type && 
-                               decryptedFields.type.includes('VerifiableCredential');
+        const isVCCertificate = decryptedFields && decryptedFields.isVC === 'true';
         
         if (isVCCertificate) {
             console.log('Processing W3C VC-structured certificate');
-            // For VC certificates, we could add additional validation here
-            // e.g., verify the VC structure, check DID format, etc.
-            
-            // Validate DID format in credentialSubject.id
-            const subjectDid = decryptedFields.credentialSubject?.id;
-            if (subjectDid && !subjectDid.startsWith('did:bsv:tm did:')) {
-                console.warn('Invalid DID format in credentialSubject:', subjectDid);
+            // Parse the essential VC data from the stringified JSON
+            try {
+                const essentialVcData = JSON.parse(decryptedFields.vcData);
+                console.log('Parsed essential VC data:', essentialVcData);
+                
+                // Validate DID format
+                const subjectDid = essentialVcData.did;
+                if (subjectDid && !subjectDid.startsWith('did:bsv:tm did:')) {
+                    console.warn('Invalid DID format:', subjectDid);
+                }
+                
+                // Store the essential VC data for database
+                decryptedFields.parsedVcData = essentialVcData;
+                decryptedFields.isReducedVC = true; // Flag indicating this is reduced data
+            } catch (parseError) {
+                console.error('Error parsing essential VC data:', parseError);
             }
         } else {
             console.log('Processing legacy certificate format');
@@ -102,24 +108,30 @@ export async function signCertificate(req, res) {
         const hashOfSerialNumber = Utils.toHex(Hash.sha256(serialNumber));
 
         // Creating certificate revocation tx
-        const revocation = await serverWallet.createAction({
-            description: 'Certificate revocation',
-            outputs: [
-                {
-                    outputDescription: 'Certificate revocation outpoint',
-                    satoshis: 1,
-                    lockingScript: Script.fromASM(`OP_SHA256 ${hashOfSerialNumber} OP_EQUAL`).toHex(),
-                    basket: `certificate revocation ${subject}`,
-                    customInstructions: JSON.stringify({
-                        serialNumber, // the unlockingScript is just the serialNumber
-                    })
+        let revocation;
+        try {
+            revocation = await serverWallet.createAction({
+                description: 'Certificate revocation',
+                outputs: [
+                    {
+                        outputDescription: 'Certificate revocation outpoint',
+                        satoshis: 1,
+                        lockingScript: Script.fromASM(`OP_SHA256 ${hashOfSerialNumber} OP_EQUAL`).toHex(),
+                        basket: `certificate revocation ${subject}`,
+                        customInstructions: JSON.stringify({
+                            serialNumber, // the unlockingScript is just the serialNumber
+                        })
+                    }
+                ],
+                options: {
+                    randomizeOutputs: false // this ensures the output is always at the same position at outputIndex 0
                 }
-            ],
-            options: {
-                randomizeOutputs: false // this ensures the output is always at the same position at outputIndex 0
-            }
-        });
-        console.log("revocationTxid", revocation.txid);
+            });
+            console.log("revocationTxid", revocation.txid);
+        } catch (revocationError) {
+            console.error("Error creating revocation transaction:", revocationError);
+            throw revocationError;
+        }
 
 
         // Signing the new certificate
@@ -153,9 +165,11 @@ export async function signCertificate(req, res) {
             updatedAt: new Date()
         };
 
-        // If it's a VC certificate, also extract the DID for easier lookup
-        if (isVCCertificate && decryptedFields.credentialSubject?.id) {
-            documentToSave.did = decryptedFields.credentialSubject.id;
+        // If it's a VC certificate, also extract the DID and essential VC data for easier lookup
+        if (isVCCertificate && decryptedFields.parsedVcData) {
+            documentToSave.did = decryptedFields.parsedVcData.did;
+            documentToSave.essentialVcData = decryptedFields.parsedVcData;
+            documentToSave.isReducedVC = decryptedFields.isReducedVC;
         }
         
         await usersCollection.updateOne({ _id: subject }, 
