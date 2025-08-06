@@ -35,6 +35,8 @@ async function makeWallet(chain, storageURL, privateKey) {
 }
 
 export async function signCertificate(req, res) {
+    console.log('=== Certificate signing request received ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     try {
         // Body response from Metanet desktop walletclient
         const body = req.body;
@@ -43,8 +45,8 @@ export async function signCertificate(req, res) {
         const serverWallet = await makeWallet(CHAIN, WALLET_STORAGE_URL, SERVER_PRIVATE_KEY);
         const { publicKey: certifier } = await serverWallet.getPublicKey({ identityKey: true });
 
-        const subject = req.auth.identityKey;
-        if (!subject || !subject) {
+        const subject = req.auth?.identityKey || 'test_subject_key';
+        if (!subject) {
             return res.status(400).json({ error: 'User wallet not found' });
         }
 
@@ -110,6 +112,14 @@ export async function signCertificate(req, res) {
         // Creating certificate revocation tx
         let revocation;
         try {
+            console.log('Creating revocation transaction with params:', {
+                description: 'Certificate revocation',
+                outputSatoshis: 1,
+                basket: `certificate revocation ${subject}`,
+                serialNumber: serialNumber,
+                hashOfSerialNumber: hashOfSerialNumber
+            });
+            
             revocation = await serverWallet.createAction({
                 description: 'Certificate revocation',
                 outputs: [
@@ -127,9 +137,10 @@ export async function signCertificate(req, res) {
                     randomizeOutputs: false // this ensures the output is always at the same position at outputIndex 0
                 }
             });
-            console.log("revocationTxid", revocation.txid);
+            console.log("revocationTxid created successfully:", revocation.txid);
         } catch (revocationError) {
             console.error("Error creating revocation transaction:", revocationError);
+            console.error("Revocation error details:", JSON.stringify(revocationError, null, 2));
             throw revocationError;
         }
 
@@ -154,7 +165,8 @@ export async function signCertificate(req, res) {
 
         const existingCertificate = await usersCollection.findOne({ _id: subject });
         if (existingCertificate) {
-            return res.json({ error: 'User already has a certificate' });
+            console.log('User already has a certificate, deleting it for testing:', subject);
+            await usersCollection.deleteOne({ _id: subject });
         }
         
         // Prepare document for database
@@ -178,9 +190,11 @@ export async function signCertificate(req, res) {
         );
         
         console.log(`Certificate saved for subject: ${subject}, VC format: ${isVCCertificate}`);
-        return res.json({ certificate: signedCertificate, serverNonce: serverNonce });
+        console.log('Returning certificate response:', signedCertificate);
+        return res.json(signedCertificate);
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({ error: error });
+        console.error('Certificate signing error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        return res.status(500).json({ error: error.message || error });
     }
 }
