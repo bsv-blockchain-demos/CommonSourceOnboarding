@@ -31,10 +31,14 @@ export default function Home() {
   const handleGenerateCert = async () => {
     try {
       // Initialize wallet if needed
-      if (!userWallet) {
-        await initializeWallet();
+      let wallet = userWallet;
+      if (!wallet) {
+        console.log('Initializing wallet...');
+        wallet = await initializeWallet();
+        if (!wallet) {
+          throw new Error('Failed to initialize wallet');
+        }
       }
-      const wallet = userWallet;
 
       // Step 1: Create user DID first
       console.log('Creating user DID...');
@@ -51,6 +55,8 @@ export default function Home() {
         email,
         work
       });
+
+      console.log('VC Data created:', vcData);
 
       // Step 3: Acquire certificate with VC data as fields
       console.log('Acquiring certificate with VC data...');
