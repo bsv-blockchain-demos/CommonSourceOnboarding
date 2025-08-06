@@ -97,7 +97,7 @@ export class BsvDidService {
       // Create locking script
       const lockingScript = await pushDrop.lock(
         fields,
-        [0, 'bsv-did'],  // Protocol ID for wallet
+        [0, 'bsvdid'],  // Protocol ID for wallet
         didDocument.id,  // Key ID
         'self',          // Counterparty
         true,            // For self
