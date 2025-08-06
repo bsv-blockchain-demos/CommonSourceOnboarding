@@ -2,11 +2,13 @@
 
 import { useContext, createContext, useState, useEffect, useCallback } from "react";
 import { useWalletContext } from "../context/walletContext";
+import { useDidContext } from "../context/DidContext";
 
 const AuthContext = createContext();
 
 export const AuthContextProvider = ({ children }) => {
   const { setCertificate, userWallet } = useWalletContext();
+  const { verifyCertificateVC, isVCCertificate } = useDidContext();
 
   // Lets the user login with their certificate if it's saved in the DB
   const loginWithCertificate = useCallback(async () => {
@@ -25,9 +27,24 @@ export const AuthContextProvider = ({ children }) => {
     const data = await response.json();
 
     if (data?.certificate) {
+      // Check if this is a VC certificate and verify it
+      if (isVCCertificate(data.certificate)) {
+        console.log('[AuthContext] Found VC certificate, verifying...');
+        const verificationResult = verifyCertificateVC(data.certificate);
+        
+        if (verificationResult.valid) {
+          console.log('[AuthContext] VC certificate verification passed');
+          console.log('Identity claims:', verificationResult.claims);
+        } else {
+          console.warn('[AuthContext] VC certificate verification failed:', verificationResult.error);
+        }
+      } else {
+        console.log('[AuthContext] Found legacy certificate format');
+      }
+      
       setCertificate(data.certificate);
     }
-  }, [userWallet]);
+  }, [userWallet, verifyCertificateVC, isVCCertificate]);
 
   useEffect(() => {
     loginWithCertificate();

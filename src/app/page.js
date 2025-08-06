@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
 import { useWalletContext } from "../context/walletContext";
+import { useDidContext } from "../context/DidContext";
 import { Utils } from "@bsv/sdk";
 import { toast } from 'react-hot-toast';
 import { useAuthContext } from "../context/authContext";
@@ -21,33 +22,53 @@ export default function Home() {
   const [generated, setGenerated] = useState(false);
 
   const { userWallet, initializeWallet, certificate } = useWalletContext();
+  const { createUserDid, createIdentityVCData } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
 
   const handleGenerateCert = async () => {
-    // Make cert with API
-    if (!userWallet) {
-      await initializeWallet();
-    }
-    const wallet = userWallet;
+    try {
+      // Initialize wallet if needed
+      if (!userWallet) {
+        await initializeWallet();
+      }
+      const wallet = userWallet;
 
-    const certResponse = await wallet.acquireCertificate({
-      type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
-      fields: {
-        username: username,
-        residence: residence,
-        age: age,
-        gender: gender,
-        email: email,
-        work: work,
-      },
-      acquisitionProtocol: "issuance",
-      certifier: serverPubKey,
-      certifierUrl: "http://localhost:8080",
-    });
-    console.log(certResponse);
-    setGenerated(true);
+      // Step 1: Create user DID first
+      console.log('Creating user DID...');
+      const didResult = await createUserDid();
+      toast.success('DID created successfully');
+
+      // Step 2: Create VC data structure for certificate
+      console.log('Creating VC data structure...');
+      const vcData = createIdentityVCData({
+        username,
+        residence,
+        age,
+        gender,
+        email,
+        work
+      });
+
+      // Step 3: Acquire certificate with VC data as fields
+      console.log('Acquiring certificate with VC data...');
+      const certResponse = await wallet.acquireCertificate({
+        type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
+        fields: vcData, // Use VC structure instead of flat fields
+        acquisitionProtocol: "issuance",
+        certifier: serverPubKey,
+        certifierUrl: "http://localhost:8080",
+      });
+      
+      console.log('Certificate with VC data acquired:', certResponse);
+      toast.success('Identity certificate generated successfully');
+      setGenerated(true);
+
+    } catch (error) {
+      console.error('Error generating certificate:', error);
+      toast.error(`Failed to generate certificate: ${error.message}`);
+    }
   }
 
   //Verify user by email
