@@ -16,7 +16,8 @@ export default function Home() {
   const [gender, setGender] = useState('');
   const [email, setEmail] = useState('');
   const [work, setWork] = useState('');
-  const [emailVerified, setEmailVerified] = useState(false);
+  // Skip email verification for testing
+  const [emailVerified, setEmailVerified] = useState(true);
   const [emailSent, setEmailSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [generated, setGenerated] = useState(false);

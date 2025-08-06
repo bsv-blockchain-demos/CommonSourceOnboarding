@@ -41,6 +41,10 @@ const wallet = await createWalletClient(
   'main'
 )
 
+// Get and log the server's public key
+const { publicKey: serverPublicKey } = await wallet.getPublicKey({ identityKey: true })
+console.log("SERVER PUBLIC KEY:", serverPublicKey)
+
 // 2. Create the auth middleware
 //    - Set `allowUnauthenticated` to false to require mutual auth on every route
 const authMiddleware = createAuthMiddleware({

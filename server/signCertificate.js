@@ -11,7 +11,7 @@ import {
     Hash
 } from '@bsv/sdk'
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
-import { connectToMongo, usersCollection } from '../lib/mongo'
+import { connectToMongo, usersCollection } from '../src/lib/mongo.js'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -78,7 +78,7 @@ export async function signCertificate(req, res) {
             
             // Validate DID format in credentialSubject.id
             const subjectDid = decryptedFields.credentialSubject?.id;
-            if (subjectDid && !subjectDid.startsWith('did:bsv:bsv_did:')) {
+            if (subjectDid && !subjectDid.startsWith('did:bsv:tm did:')) {
                 console.warn('Invalid DID format in credentialSubject:', subjectDid);
             }
         } else {

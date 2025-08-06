@@ -10,7 +10,7 @@ export class BsvDidService {
   constructor(walletClient, overlayServiceUrl = null) {
     this.walletClient = walletClient;
     this.overlayServiceUrl = overlayServiceUrl;
-    this.topic = 'bsv_did';
+    this.topic = 'tm did';
     this.protocolId = 'CMSRC';
   }
 
@@ -87,7 +87,7 @@ export class BsvDidService {
       // Create PushDrop fields for BSV transaction
       const fields = [
         Utils.toArray(this.protocolId, 'utf8'),        // CMSRC protocol
-        Utils.toArray(this.topic, 'utf8'),             // bsv_did topic
+        Utils.toArray(this.topic, 'utf8'),             // tm did topic
         Utils.toArray(JSON.stringify(didDocument), 'utf8') // DID document
       ];
 
@@ -97,7 +97,7 @@ export class BsvDidService {
       // Create locking script
       const lockingScript = await pushDrop.lock(
         fields,
-        [0, 'bsv-did'],  // Protocol ID for wallet
+        [0, 'tm did'],  // Protocol ID for wallet
         didDocument.id,  // Key ID
         'self',          // Counterparty
         true,            // For self
@@ -112,7 +112,7 @@ export class BsvDidService {
           satoshis: 1,
           lockingScript: lockingScript.toHex(),
           outputDescription: 'DID Document',
-          basket: 'bsv-did',
+          basket: 'tm did',
           customInstructions: JSON.stringify({
             protocolId: this.protocolId,
             topic: this.topic,
@@ -124,7 +124,7 @@ export class BsvDidService {
           randomizeOutputs: false,
           noSend: false // Send to blockchain
         },
-        labels: ['bsv-did', 'create']
+        labels: ['tm did', 'create']
       });
 
       return {
