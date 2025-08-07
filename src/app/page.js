@@ -41,6 +41,22 @@ export default function Home() {
         }
       }
       
+      // Log the user's identity key to help with funding
+      const identityKey = await wallet.getPublicKey({ identityKey: true });
+      console.log('User wallet identity key (needs funding):', identityKey);
+      
+      // Check wallet balance
+      try {
+        const balance = await wallet.getBalance();
+        console.log('User wallet balance:', balance, 'satoshis');
+        if (balance < 10) {
+          toast.error(`Insufficient funds in wallet. Balance: ${balance} satoshis. Please fund your wallet.`);
+          return;
+        }
+      } catch (balanceError) {
+        console.log('Could not check balance:', balanceError);
+      }
+      
       // // In production check the db if the user is verified before proceeding
       // const res = await fetch('/emailVerify', {
       //   method: 'POST',

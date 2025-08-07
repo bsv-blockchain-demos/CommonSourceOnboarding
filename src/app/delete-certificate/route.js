@@ -13,6 +13,8 @@ export async function POST(req) {
     const { publicKey, certificate } = body;
 
     console.log("certificate", certificate);
+    console.log("certificate.serialNumber type:", typeof certificate.serialNumber);
+    console.log("certificate.serialNumber value:", certificate.serialNumber);
 
     const revocationOutpoint = certificate.revocationOutpoint;
     const [expectedTxid, expectedOutputIndex] = revocationOutpoint.split('.');
@@ -34,31 +36,41 @@ export async function POST(req) {
 
         console.log("list", list);
 
-        // Find the matching output or use the first available one
-        const output = list.outputs[0];
+        // Find the matching output that matches the revocation outpoint
+        let output = null;
+        for (const o of list.outputs) {
+            if (o.outpoint === revocationOutpoint) {
+                output = o;
+                break;
+            }
+        }
+        
+        // If no matching output found, use the first one (fallback)
+        if (!output) {
+            console.log(`Warning: No output matching ${revocationOutpoint}, using first available`);
+            output = list.outputs[0];
+        }
+        
+        console.log("Using output:", output);
         const [actualTxid, actualOutputIndex] = output.outpoint.split('.');
 
         // Create proper unlocking script - just push the serialNumber bytes
-        const serialNumberBytes = Utils.toArray(certificate.serialNumber, 'base64');
+        // Use UTF-8 encoding (not base64) for the serialNumber
+        const serialNumberBytes = Utils.toArray(certificate.serialNumber, 'utf8');
         const unlockingScript = Utils.toHex([serialNumberBytes.length, ...serialNumberBytes]);
+        console.log("Unlocking script:", unlockingScript);
 
+        // Try creating a transaction that spends from the basket
+        // The wallet should automatically find and use the outputs in the basket
         const tx = await wallet.createAction({
             description: 'Certificate revocation',
-            inputBEEF: list.BEEF,
-            inputs: [
-                {
-                    inputDescription: 'Certificate revocation',
-                    basket: `certificate revocation ${certificate.subject}`,
-                    txid: actualTxid,
-                    outputIndex: parseInt(actualOutputIndex),
-                    unlockingScript: unlockingScript,
-                }
-            ],
+            basket: `certificate revocation ${certificate.subject}`,
+            outputs: [] // No outputs - we're just burning the revocation token
         });
         console.log("tx", tx);
 
         if (!tx) {
-            return NextResponse.json({ message: 'Failed to spend certificate outpoint', txid, outpoint }, { status: 400 });
+            return NextResponse.json({ message: 'Failed to spend certificate outpoint', txid: actualTxid, outpoint: output.outpoint }, { status: 400 });
         }
 
         // Delete cert from the db
