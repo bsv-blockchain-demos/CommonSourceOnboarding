@@ -40,7 +40,22 @@ export default function Home() {
           throw new Error('Failed to initialize wallet');
         }
       }
+      
+      // // In production check the db if the user is verified before proceeding
+      // const res = await fetch('/emailVerify', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({ email, type: 'check-verified' }),
+      // });
+      // const jsonRes = await res.json();
+      // if (!jsonRes.verificationStatus) {
+      //   toast.error(jsonRes.message);
+      //   return;
+      // }
 
+      // Step 1: Create user DID first
       console.log('Creating user DID...');
       const didResult = await createUserDid();
       toast.success('DID created successfully');
@@ -127,7 +142,7 @@ export default function Home() {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, type: 'delete-on-verified' }),
+      body: JSON.stringify({ email, type: 'delete-on-verified' }), // For production change to 'verified'
     });
     if (!res.ok) {
       toast.error("Something failed, please try again");
