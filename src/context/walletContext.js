@@ -45,7 +45,7 @@ export const WalletContextProvider = ({ children }) => {
 
     useEffect(() => {
         initializeWallet();
-    }, []);
+    }, [initializeWallet]);
 
     // Check for certificate using unified authentication service
     useEffect(() => {

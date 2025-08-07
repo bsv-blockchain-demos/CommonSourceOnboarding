@@ -322,7 +322,7 @@ export default function Home() {
             ) : (
               <div>
                 <h1 className="text-2xl font-semibold text-white mb-2 text-center">Certify your identity using your email address</h1>
-                <p className="text-slate-400 text-center mb-6">We'll send you an email to verify</p>
+                <p className="text-slate-400 text-center mb-6">We&apos;ll send you an email to verify</p>
                 <div className="space-y-4">
                   <input
                     type="email"
