@@ -83,21 +83,19 @@ export default function Home() {
 
       console.log('VC Data created:', vcData);
 
-      // Acquire certificate with essential VC fields only
-      console.log('Acquiring certificate with essential VC data...');
-      const essentialData = {
-        did: vcData.credentialSubject.id,
-        username: vcData.credentialSubject.username,
-        email: vcData.credentialSubject.email,
-        issued: vcData.issuanceDate
-      };
+      // Acquire certificate with minimal fields to avoid size limits
+      console.log('Acquiring certificate with minimal VC reference...');
       
+      // Only store minimal data in certificate fields due to encryption size limits
+      // Full VC data will be stored in MongoDB separately
       const certResponse = await wallet.acquireCertificate({
         type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
         fields: {
-          vcData: JSON.stringify(essentialData), // Only essential VC data
-          isVC: 'true', // Flag to indicate this is a VC certificate
-          fullVC: 'stored_separately' // Indicate full VC is stored in DB
+          // Keep fields minimal to avoid database column size limits after encryption
+          username: username,
+          email: email,
+          isVC: 'true',
+          didRef: userDid ? userDid.split(':').pop().substring(0, 8) : 'pending' // Just first 8 chars of DID as reference
         },
         acquisitionProtocol: "issuance",
         certifier: serverPubKey,

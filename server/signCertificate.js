@@ -71,24 +71,14 @@ export async function signCertificate(req, res) {
         const isVCCertificate = decryptedFields && decryptedFields.isVC === 'true';
         
         if (isVCCertificate) {
-            console.log('Processing W3C VC-structured certificate');
-            // Parse the essential VC data from the stringified JSON
-            try {
-                const essentialVcData = JSON.parse(decryptedFields.vcData);
-                console.log('Parsed essential VC data:', essentialVcData);
-                
-                // Validate DID format
-                const subjectDid = essentialVcData.did;
-                if (subjectDid && !subjectDid.startsWith('did:bsv:tm did:')) {
-                    console.warn('Invalid DID format:', subjectDid);
-                }
-                
-                // Store the essential VC data for database
-                decryptedFields.parsedVcData = essentialVcData;
-                decryptedFields.isReducedVC = true; // Flag indicating this is reduced data
-            } catch (parseError) {
-                console.error('Error parsing essential VC data:', parseError);
-            }
+            console.log('Processing W3C VC-structured certificate with minimal fields');
+            // For VC certificates, we store the full VC data in MongoDB separately
+            // The certificate itself only contains minimal reference fields
+            console.log('Certificate fields:', {
+                username: decryptedFields.username,
+                email: decryptedFields.email,
+                didRef: decryptedFields.didRef
+            });
         } else {
             console.log('Processing legacy certificate format');
         }
@@ -177,11 +167,32 @@ export async function signCertificate(req, res) {
             updatedAt: new Date()
         };
 
-        // If it's a VC certificate, also extract the DID and essential VC data for easier lookup
-        if (isVCCertificate && decryptedFields.parsedVcData) {
-            documentToSave.did = decryptedFields.parsedVcData.did;
-            documentToSave.essentialVcData = decryptedFields.parsedVcData;
-            documentToSave.isReducedVC = decryptedFields.isReducedVC;
+        // If it's a VC certificate, create and store the full VC data separately
+        if (isVCCertificate) {
+            // Generate a simple DID for this certificate (in production, use proper DID generation)
+            const didSerialNumber = serialNumber.replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+            const userDid = `did:bsv:tm did:${didSerialNumber}`;
+            
+            // Create the full VC structure to store in MongoDB
+            const fullVcData = {
+                '@context': ['https://www.w3.org/2018/credentials/v1'],
+                type: ['VerifiableCredential', 'IdentityCredential'],
+                issuer: `did:bsv:tm did:server`,
+                issuanceDate: new Date().toISOString(),
+                credentialSubject: {
+                    id: userDid,
+                    username: decryptedFields.username,
+                    email: decryptedFields.email,
+                    residence: decryptedFields.residence || '',
+                    age: decryptedFields.age || '',
+                    gender: decryptedFields.gender || '',
+                    work: decryptedFields.work || ''
+                }
+            };
+            
+            documentToSave.did = userDid;
+            documentToSave.vcData = fullVcData;
+            documentToSave.didRef = decryptedFields.didRef;
         }
         
         await usersCollection.updateOne({ _id: subject }, 
@@ -190,8 +201,20 @@ export async function signCertificate(req, res) {
         );
         
         console.log(`Certificate saved for subject: ${subject}, VC format: ${isVCCertificate}`);
-        console.log('Returning certificate response:', signedCertificate);
-        return res.json(signedCertificate);
+        
+        // Format response for BSV SDK's acquireCertificate method
+        const protocolResponse = {
+            protocol: 'issuance',
+            certificate: signedCertificate,
+            serverNonce: serverNonce,
+            timestamp: new Date().toISOString(),
+            version: '1.0'
+        };
+        
+        console.log('Returning certificate response with protocol wrapper:', protocolResponse);
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('X-Certificate-Protocol', 'issuance');
+        return res.json(protocolResponse);
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
