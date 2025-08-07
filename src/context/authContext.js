@@ -53,7 +53,6 @@ export const AuthContextProvider = ({ children }) => {
       } else {
         console.log('[AuthContext] No certificate found for login');
       }
-      
     } catch (error) {
       console.error('[AuthContext] Error during enhanced login:', error);
     }

@@ -285,7 +285,7 @@ export default function Home() {
                 className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 ${
                   !didCreated
                     ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 hover:cursor-pointer text-white'
                 }`}
               >
                 Generate Certificate

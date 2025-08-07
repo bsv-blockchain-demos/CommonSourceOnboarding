@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectToMongo, usersCollection } from "../../lib/mongo";
-import { KeyDeriver, PrivateKey, Script, Utils, WalletClient } from "@bsv/sdk";
+import { KeyDeriver, PrivateKey, Utils, WalletClient } from "@bsv/sdk";
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
 
 const CHAIN = process.env.CHAIN;
@@ -16,8 +16,7 @@ export async function POST(req) {
     console.log("certificate.serialNumber type:", typeof certificate.serialNumber);
     console.log("certificate.serialNumber value:", certificate.serialNumber);
 
-    const revocationOutpoint = certificate.revocationOutpoint;
-    const [expectedTxid, expectedOutputIndex] = revocationOutpoint.split('.');
+    // const revocationOutpoint = certificate.revocationOutpoint;
 
     try {
         // Spend tx outpoint
@@ -36,23 +35,9 @@ export async function POST(req) {
 
         console.log("list", list);
 
-        // Find the matching output that matches the revocation outpoint
-        let output = null;
-        for (const o of list.outputs) {
-            if (o.outpoint === revocationOutpoint) {
-                output = o;
-                break;
-            }
-        }
-        
-        // If no matching output found, use the first one (fallback)
-        if (!output) {
-            console.log(`Warning: No output matching ${revocationOutpoint}, using first available`);
-            output = list.outputs[0];
-        }
-        
+        // Find the matching output or use the first available one
+        const output = list.outputs[0];
         console.log("Using output:", output);
-        const [actualTxid, actualOutputIndex] = output.outpoint.split('.');
 
         // Create proper unlocking script - just push the serialNumber bytes
         // Use UTF-8 encoding (not base64) for the serialNumber
@@ -77,7 +62,7 @@ export async function POST(req) {
         console.log("tx", tx);
 
         if (!tx) {
-            return NextResponse.json({ message: 'Failed to spend certificate outpoint', txid: actualTxid, outpoint: output.outpoint }, { status: 400 });
+            return NextResponse.json({ message: 'Failed to spend certificate outpoint', outpoint: output.outpoint }, { status: 400 });
         }
 
         // Delete cert from the db
