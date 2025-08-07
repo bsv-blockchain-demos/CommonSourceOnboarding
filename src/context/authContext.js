@@ -9,7 +9,7 @@ const AuthContext = createContext();
 
 export const AuthContextProvider = ({ children }) => {
   const { setCertificate, userWallet } = useWalletContext();
-  const { verifyCertificateVC, isVCCertificate } = useDidContext();
+  const { verifyCertificateVC, isVCCertificate, bsvDidService, bsvVcService } = useDidContext();
 
   // Enhanced login with unified authentication and VC verification
   const loginWithCertificate = useCallback(async () => {
@@ -28,11 +28,11 @@ export const AuthContextProvider = ({ children }) => {
       if (authResult.success) {
         const certificate = authResult.certificate;
         
-        // Enhanced VC verification if available
+        // Enhanced VC verification with DID services
         const vcVerificationResult = await unifiedAuth.verifyVCCertificate(
           certificate, 
-          null, // DID service - will be passed when available
-          { verifyCertificateVC, isVCCertificate } // VC service methods
+          bsvDidService, // DID service for resolution
+          bsvVcService || { verifyCertificateVC, isVCCertificate } // VC service methods
         );
         
         if (vcVerificationResult.valid) {
@@ -57,7 +57,7 @@ export const AuthContextProvider = ({ children }) => {
     } catch (error) {
       console.error('[AuthContext] Error during enhanced login:', error);
     }
-  }, [userWallet, verifyCertificateVC, isVCCertificate, setCertificate]);
+  }, [userWallet, verifyCertificateVC, isVCCertificate, setCertificate, bsvDidService, bsvVcService]);
 
   useEffect(() => {
     loginWithCertificate();
