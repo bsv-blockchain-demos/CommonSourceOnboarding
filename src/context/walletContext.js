@@ -1,10 +1,9 @@
 "use client"
 
 import { useContext, createContext, useState, useEffect, useCallback } from "react";
-import { WalletClient, Utils } from "@bsv/sdk";
+import { WalletClient } from "@bsv/sdk";
 import { toast } from 'react-hot-toast';
-
-const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
+import { unifiedAuth } from '../lib/authentication';
 
 const WalletContext = createContext();
 
@@ -48,44 +47,47 @@ export const WalletContextProvider = ({ children }) => {
         initializeWallet();
     }, []);
 
-    // Check user wallet for certificate of our type
+    // Check for certificate using unified authentication service
     useEffect(() => {
-        async function checkCertificate() {
-            if (!userWallet) return;
+        async function authenticateUser() {
+            if (!userWallet || !userPubKey) return;
 
-            const certificate = await userWallet.listCertificates({
-                types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))],
-                certifiers: [serverPubKey],
-                limit: 1,
-            });
-            // In production check if this certificate is valid before proceeding
-            // EX: Check if the certificate field keys are the ones we expect
-
-            if (certificate.totalCertificates > 0) {
-                // save to db with api route if it exists
-                const response = await fetch('/save-certificate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ certificate: certificate.certificates[0], subject: userPubKey }),
-                });
-                const data = await response.json();
+            console.log('[WalletContext] Starting unified authentication...');
+            
+            try {
+                const authResult = await unifiedAuth.authenticateUser(userWallet, userPubKey);
                 
-                // On successful save, set the certificate to log in the user
-                // If the user already has a certificate, set the certificate to log in the user
-                if (response.ok) {
-                    toast.success('Certificate saved successfully from wallet');
-                    setCertificate(certificate.certificates[0]);
-                } else if (data.message === 'User already has a certificate') {
-                    setCertificate(certificate.certificates[0]);
+                if (authResult.success) {
+                    console.log(`[WalletContext] Authentication successful from ${authResult.source}`);
+                    
+                    if (authResult.source === 'wallet') {
+                        toast.success('Certificate found and verified from wallet', {
+                            duration: 5000,
+                            position: 'top-center'
+                        });
+                    } else {
+                        toast.success('Certificate found and verified from database', {
+                            duration: 5000,
+                            position: 'top-center'
+                        });
+                    }
+                    
+                    setCertificate(authResult.certificate);
                 } else {
-                    toast.error(`${data.message}`);
+                    console.log('[WalletContext] No certificate found - user needs to generate one');
+                    // Don't show error toast here - this is normal for new users
                 }
+            } catch (error) {
+                console.error('[WalletContext] Authentication error:', error);
+                toast.error('Error during authentication process', {
+                    duration: 5000,
+                    position: 'top-center'
+                });
             }
         }
-        checkCertificate();
-    }, [userWallet]);
+        
+        authenticateUser();
+    }, [userWallet, userPubKey]);
 
     return (
         <WalletContext.Provider value={{ userWallet, userPubKey, initializeWallet, certificate, setCertificate }}>
