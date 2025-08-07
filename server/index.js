@@ -45,13 +45,38 @@ const wallet = await createWalletClient(
 const { publicKey: serverPublicKey } = await wallet.getPublicKey({ identityKey: true })
 console.log("SERVER PUBLIC KEY:", serverPublicKey)
 
-// 2. Create the auth middleware
-//    - Set `allowUnauthenticated` to false to require mutual auth on every route
+// 2. Create the auth middleware with enhanced security
+//    - Enable mutual authentication for cryptographic proof of ownership
 const authMiddleware = createAuthMiddleware({
   wallet,
-  allowUnauthenticated: true, // Temporarily allow unauthenticated for testing
+  allowUnauthenticated: false, // Enable mutual authentication for security
   logger: console,
   logLevel: 'debug',
+  
+  // Certificate validation callback for comprehensive verification
+  onCertificatesReceived: async (certificates) => {
+    console.log(`[Auth] Validating ${certificates.length} certificates...`);
+    
+    for (const cert of certificates) {
+      try {
+        // Basic certificate validation - verify it has required fields
+        if (!cert.serialNumber || !cert.subject || !cert.certifier) {
+          throw new Error('Certificate missing required fields');
+        }
+        
+        // For now, we'll add basic certificate validation
+        // TODO: Add revocation status checking via overlay network
+        // TODO: Add certificate signature verification against known certifier
+        console.log(`[Auth] Certificate validation passed for cert: ${cert.serialNumber?.substring(0, 8)}...`);
+        
+      } catch (error) {
+        console.error(`[Auth] Certificate validation failed:`, error);
+        throw new Error(`Certificate verification failed: ${error.message}`);
+      }
+    }
+    
+    console.log('[Auth] All certificates validated successfully');
+  }
 })
 
 // 3. Create and configure the Express app
@@ -76,7 +101,7 @@ app.use(bodyParser.json())
 app.use(authMiddleware)
 
 // Add request logging middleware
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });

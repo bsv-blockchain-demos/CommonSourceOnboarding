@@ -83,10 +83,19 @@ export async function signCertificate(req, res) {
             console.log('Processing legacy certificate format');
         }
 
-        // const valid = await verifyNonce(clientNonce, wallet, subject);
-        // if (!valid) {
-        //     return res.status(400).json({ error: 'Invalid nonce' });
-        // }
+        // Verify client nonce for replay protection
+        console.log('Verifying client nonce for replay protection...');
+        try {
+            const valid = await verifyNonce(clientNonce, serverWallet, subject);
+            if (!valid) {
+                console.log('Nonce verification failed for subject:', subject);
+                return res.status(400).json({ error: 'Invalid client nonce - replay protection failed' });
+            }
+            console.log('Client nonce verification passed');
+        } catch (nonceError) {
+            console.error('Error during nonce verification:', nonceError);
+            return res.status(400).json({ error: 'Nonce verification error: ' + nonceError.message });
+        }
         const serverNonce = await createNonce(serverWallet, subject);
 
         // The server computes a serial number from the client and server nonces
