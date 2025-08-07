@@ -58,6 +58,7 @@ export async function POST(req) {
                     unlockingScript: unlockingScript,
                 }
             ],
+            outputs: [] // No outputs - we're just burning the revocation token
         });
         console.log("tx", tx);
 

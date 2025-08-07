@@ -114,19 +114,29 @@ export default function Home() {
 
       console.log('VC Data created:', vcData);
 
-      // Acquire certificate with minimal fields to avoid size limits
-      console.log('Acquiring certificate with minimal VC reference...');
+      // Store VC data locally for later resolution (until overlay is implemented)
+      const didRef = userDid ? userDid.split(':').pop().substring(0, 8) : 'pending';
+      const storedVCKey = `vc_data_${didRef}`;
+      localStorage.setItem(storedVCKey, JSON.stringify(vcData));
+      console.log('Stored VC data for later resolution');
 
-      // Only store minimal data in certificate fields due to encryption size limits
-      // Full VC data will be stored in MongoDB separately
+      // Acquire certificate with ALL fields for compatibility
+      // IMPORTANT: Including all fields for age verification in whiskey store
+      console.log('Acquiring certificate with user identity fields...');
+
       const certResponse = await wallet.acquireCertificate({
         type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
         fields: {
-          // Keep fields minimal to avoid database column size limits after encryption
+          // Include all fields for backward compatibility and age verification
           username: username,
+          residence: residence,
+          age: age,  // CRITICAL: This is needed for age verification in whiskey store
+          gender: gender,
           email: email,
+          work: work,
+          // VC metadata
           isVC: 'true',
-          didRef: userDid ? userDid.split(':').pop().substring(0, 8) : 'pending' // Just first 8 chars of DID as reference
+          didRef: didRef
         },
         acquisitionProtocol: "issuance",
         certifier: serverPubKey,
