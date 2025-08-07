@@ -12,9 +12,10 @@ export const AuthContextProvider = ({ children }) => {
 
   // Lets the user login with their certificate if it's saved in the DB
   const loginWithCertificate = useCallback(async () => {
-    if (!userWallet) return;
+    try {
+      if (!userWallet) return;
 
-    const { publicKey } = userWallet.getPublicKey({ identityKey: true });
+      const { publicKey } = await userWallet.getPublicKey({ identityKey: true });
 
     const response = await fetch("/login", {
       method: "POST",
@@ -44,7 +45,10 @@ export const AuthContextProvider = ({ children }) => {
       
       setCertificate(data.certificate);
     }
-  }, [userWallet, verifyCertificateVC, isVCCertificate]);
+    } catch (error) {
+      console.error('[AuthContext] Error logging in with certificate:', error);
+    }
+  }, [userWallet, verifyCertificateVC, isVCCertificate, setCertificate]);
 
   useEffect(() => {
     loginWithCertificate();

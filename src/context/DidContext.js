@@ -66,7 +66,7 @@ export const DidContextProvider = ({ children }) => {
       }
 
       // Server DID - this should come from environment config
-      const serverDid = process.env.NEXT_PUBLIC_SERVER_DID || 'did:bsv:bsv_did:server';
+      const serverDid = process.env.NEXT_PUBLIC_SERVER_DID || 'did:bsv:tm did:server';
 
       const vcData = vcService.createIdentityCredentialData({
         issuerDid: serverDid,

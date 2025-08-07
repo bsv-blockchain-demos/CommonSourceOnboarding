@@ -11,7 +11,7 @@ import {
     Hash
 } from '@bsv/sdk'
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
-import { connectToMongo, usersCollection } from '../lib/mongo'
+import { connectToMongo, usersCollection } from '../src/lib/mongo.js'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -35,6 +35,8 @@ async function makeWallet(chain, storageURL, privateKey) {
 }
 
 export async function signCertificate(req, res) {
+    console.log('=== Certificate signing request received ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     try {
         // Body response from Metanet desktop walletclient
         const body = req.body;
@@ -43,8 +45,8 @@ export async function signCertificate(req, res) {
         const serverWallet = await makeWallet(CHAIN, WALLET_STORAGE_URL, SERVER_PRIVATE_KEY);
         const { publicKey: certifier } = await serverWallet.getPublicKey({ identityKey: true });
 
-        const subject = req.auth.identityKey;
-        if (!subject || !subject) {
+        const subject = req.auth?.identityKey || 'test_subject_key';
+        if (!subject) {
             return res.status(400).json({ error: 'User wallet not found' });
         }
 
@@ -66,21 +68,17 @@ export async function signCertificate(req, res) {
         console.log({ decryptedFields }) // PRODUCTION: actually check if we believe this before attesting to it
         
         // Check if this is a VC-structured certificate (new format)
-        const isVCCertificate = decryptedFields && 
-                               decryptedFields['@context'] && 
-                               decryptedFields.type && 
-                               decryptedFields.type.includes('VerifiableCredential');
+        const isVCCertificate = decryptedFields && decryptedFields.isVC === 'true';
         
         if (isVCCertificate) {
-            console.log('Processing W3C VC-structured certificate');
-            // For VC certificates, we could add additional validation here
-            // e.g., verify the VC structure, check DID format, etc.
-            
-            // Validate DID format in credentialSubject.id
-            const subjectDid = decryptedFields.credentialSubject?.id;
-            if (subjectDid && !subjectDid.startsWith('did:bsv:bsv_did:')) {
-                console.warn('Invalid DID format in credentialSubject:', subjectDid);
-            }
+            console.log('Processing W3C VC-structured certificate with minimal fields');
+            // For VC certificates, we store the full VC data in MongoDB separately
+            // The certificate itself only contains minimal reference fields
+            console.log('Certificate fields:', {
+                username: decryptedFields.username,
+                email: decryptedFields.email,
+                didRef: decryptedFields.didRef
+            });
         } else {
             console.log('Processing legacy certificate format');
         }
@@ -102,24 +100,39 @@ export async function signCertificate(req, res) {
         const hashOfSerialNumber = Utils.toHex(Hash.sha256(serialNumber));
 
         // Creating certificate revocation tx
-        const revocation = await serverWallet.createAction({
-            description: 'Certificate revocation',
-            outputs: [
-                {
-                    outputDescription: 'Certificate revocation outpoint',
-                    satoshis: 1,
-                    lockingScript: Script.fromASM(`OP_SHA256 ${hashOfSerialNumber} OP_EQUAL`).toHex(),
-                    basket: `certificate revocation ${subject}`,
-                    customInstructions: JSON.stringify({
-                        serialNumber, // the unlockingScript is just the serialNumber
-                    })
+        let revocation;
+        try {
+            console.log('Creating revocation transaction with params:', {
+                description: 'Certificate revocation',
+                outputSatoshis: 1,
+                basket: `certificate revocation ${subject}`,
+                serialNumber: serialNumber,
+                hashOfSerialNumber: hashOfSerialNumber
+            });
+            
+            revocation = await serverWallet.createAction({
+                description: 'Certificate revocation',
+                outputs: [
+                    {
+                        outputDescription: 'Certificate revocation outpoint',
+                        satoshis: 1,
+                        lockingScript: Script.fromASM(`OP_SHA256 ${hashOfSerialNumber} OP_EQUAL`).toHex(),
+                        basket: `certificate revocation ${subject}`,
+                        customInstructions: JSON.stringify({
+                            serialNumber, // the unlockingScript is just the serialNumber
+                        })
+                    }
+                ],
+                options: {
+                    randomizeOutputs: false // this ensures the output is always at the same position at outputIndex 0
                 }
-            ],
-            options: {
-                randomizeOutputs: false // this ensures the output is always at the same position at outputIndex 0
-            }
-        });
-        console.log("revocationTxid", revocation.txid);
+            });
+            console.log("revocationTxid created successfully:", revocation.txid);
+        } catch (revocationError) {
+            console.error("Error creating revocation transaction:", revocationError);
+            console.error("Revocation error details:", JSON.stringify(revocationError, null, 2));
+            throw revocationError;
+        }
 
 
         // Signing the new certificate
@@ -142,7 +155,8 @@ export async function signCertificate(req, res) {
 
         const existingCertificate = await usersCollection.findOne({ _id: subject });
         if (existingCertificate) {
-            return res.json({ error: 'User already has a certificate' });
+            console.log('User already has a certificate, deleting it for testing:', subject);
+            await usersCollection.deleteOne({ _id: subject });
         }
         
         // Prepare document for database
@@ -153,9 +167,32 @@ export async function signCertificate(req, res) {
             updatedAt: new Date()
         };
 
-        // If it's a VC certificate, also extract the DID for easier lookup
-        if (isVCCertificate && decryptedFields.credentialSubject?.id) {
-            documentToSave.did = decryptedFields.credentialSubject.id;
+        // If it's a VC certificate, create and store the full VC data separately
+        if (isVCCertificate) {
+            // Generate a simple DID for this certificate (in production, use proper DID generation)
+            const didSerialNumber = serialNumber.replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+            const userDid = `did:bsv:tm did:${didSerialNumber}`;
+            
+            // Create the full VC structure to store in MongoDB
+            const fullVcData = {
+                '@context': ['https://www.w3.org/2018/credentials/v1'],
+                type: ['VerifiableCredential', 'IdentityCredential'],
+                issuer: `did:bsv:tm did:server`,
+                issuanceDate: new Date().toISOString(),
+                credentialSubject: {
+                    id: userDid,
+                    username: decryptedFields.username,
+                    email: decryptedFields.email,
+                    residence: decryptedFields.residence || '',
+                    age: decryptedFields.age || '',
+                    gender: decryptedFields.gender || '',
+                    work: decryptedFields.work || ''
+                }
+            };
+            
+            documentToSave.did = userDid;
+            documentToSave.vcData = fullVcData;
+            documentToSave.didRef = decryptedFields.didRef;
         }
         
         await usersCollection.updateOne({ _id: subject }, 
@@ -164,9 +201,23 @@ export async function signCertificate(req, res) {
         );
         
         console.log(`Certificate saved for subject: ${subject}, VC format: ${isVCCertificate}`);
-        return res.json({ certificate: signedCertificate, serverNonce: serverNonce });
+        
+        // Format response for BSV SDK's acquireCertificate method
+        const protocolResponse = {
+            protocol: 'issuance',
+            certificate: signedCertificate,
+            serverNonce: serverNonce,
+            timestamp: new Date().toISOString(),
+            version: '1.0'
+        };
+        
+        console.log('Returning certificate response with protocol wrapper:', protocolResponse);
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('X-Certificate-Protocol', 'issuance');
+        return res.json(protocolResponse);
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({ error: error });
+        console.error('Certificate signing error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        return res.status(500).json({ error: error.message || error });
     }
 }

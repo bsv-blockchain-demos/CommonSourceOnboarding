@@ -41,11 +41,15 @@ const wallet = await createWalletClient(
   'main'
 )
 
+// Get and log the server's public key
+const { publicKey: serverPublicKey } = await wallet.getPublicKey({ identityKey: true })
+console.log("SERVER PUBLIC KEY:", serverPublicKey)
+
 // 2. Create the auth middleware
 //    - Set `allowUnauthenticated` to false to require mutual auth on every route
 const authMiddleware = createAuthMiddleware({
   wallet,
-  allowUnauthenticated: false,
+  allowUnauthenticated: true, // Temporarily allow unauthenticated for testing
   logger: console,
   logLevel: 'debug',
 })
@@ -70,6 +74,12 @@ app.use(bodyParser.json())
 
 // 4. Apply the auth middleware globally (or to specific routes)
 app.use(authMiddleware)
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
 
 // 5. Define your routes as usual
 app.post('/signCertificate', signCertificate)

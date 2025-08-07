@@ -31,6 +31,12 @@ const LoggedInPage = () => {
         setCertificate(null);
     }
 
+    const handleLogout = () => {
+        // Simple logout - just clear the certificate from state
+        setCertificate(null);
+        toast.success("Logged out successfully");
+    }
+
     return (
         <div className="w-full max-w-md">
             <div className="bg-slate-800 rounded-lg p-8 shadow-xl">
@@ -43,6 +49,12 @@ const LoggedInPage = () => {
                         className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900 hover:cursor-pointer"
                     >
                         Revoke Certificate
+                    </button>
+                    <button 
+                        onClick={handleLogout}
+                        className="w-full bg-slate-600 hover:bg-slate-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-slate-900 hover:cursor-pointer"
+                    >
+                        Logout (Keep Certificate)
                     </button>
                 </div>
             </div>

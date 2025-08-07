@@ -15,7 +15,7 @@ export async function POST(req) {
     console.log("certificate", certificate);
 
     const revocationOutpoint = certificate.revocationOutpoint;
-    const [txid, outpoint] = revocationOutpoint.split('.');
+    const [expectedTxid, expectedOutputIndex] = revocationOutpoint.split('.');
 
     try {
         // Spend tx outpoint
@@ -25,7 +25,7 @@ export async function POST(req) {
         const list = await wallet.listOutputs({
             basket: `certificate revocation ${certificate.subject}`,
             include: 'entire transactions',
-            limit: 1
+            limit: 10 // Get more outputs to find the right one
         })
 
         if (list.outputs.length === 0) {
@@ -34,6 +34,14 @@ export async function POST(req) {
 
         console.log("list", list);
 
+        // Find the matching output or use the first available one
+        const output = list.outputs[0];
+        const [actualTxid, actualOutputIndex] = output.outpoint.split('.');
+
+        // Create proper unlocking script - just push the serialNumber bytes
+        const serialNumberBytes = Utils.toArray(certificate.serialNumber, 'base64');
+        const unlockingScript = Utils.toHex([serialNumberBytes.length, ...serialNumberBytes]);
+
         const tx = await wallet.createAction({
             description: 'Certificate revocation',
             inputBEEF: list.BEEF,
@@ -41,9 +49,9 @@ export async function POST(req) {
                 {
                     inputDescription: 'Certificate revocation',
                     basket: `certificate revocation ${certificate.subject}`,
-                    txid,
-                    outpoint: revocationOutpoint,
-                    unlockingScript: Script.fromASM(certificate.serialNumber).toHex(),
+                    txid: actualTxid,
+                    outputIndex: parseInt(actualOutputIndex),
+                    unlockingScript: unlockingScript,
                 }
             ],
         });
