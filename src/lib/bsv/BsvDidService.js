@@ -140,7 +140,7 @@ export class BsvDidService {
 
   /**
    * Resolve a DID to its DID document
-   * This will be enhanced later with overlay service integration
+   * Enhanced implementation with database lookup and basic validation
    */
   async resolveDID(did) {
     try {
@@ -149,20 +149,98 @@ export class BsvDidService {
       // Parse DID to extract components
       const didParts = did.split(':');
       if (didParts.length !== 4 || didParts[0] !== 'did' || didParts[1] !== 'bsv') {
-        throw new Error('Invalid DID format');
+        throw new Error('Invalid DID format - expected did:bsv:topic:identifier');
       }
 
-      const topic = didParts[2];
-      const serialNumber = didParts[3];
+      const topic = didParts[2];   // 'tm did'
 
-      // For now, return a placeholder - this will be enhanced with database lookup
-      // and overlay service integration in later phases
-      console.log(`[BsvDidService] DID resolution not yet fully implemented for: ${did}`);
+      // Validate expected topic
+      if (topic !== this.topic.replace(' ', '')) {
+        throw new Error(`Unsupported DID topic: ${topic}`);
+      }
+
+      // Attempt to resolve from local database first
+      const dbResult = await this.resolveDIDFromDatabase(did);
+      if (dbResult) {
+        console.log(`[BsvDidService] DID resolved from database: ${did}`);
+        return dbResult;
+      }
+
+      // TODO: Implement overlay network lookup for DIDs stored on BSV blockchain
+      // This would query the overlay service for transactions containing DID documents
+      console.log(`[BsvDidService] DID not found in database, overlay lookup not yet implemented: ${did}`);
+      
+      // Return null if not found (rather than throwing error to allow graceful handling)
       return null;
 
     } catch (error) {
       console.error('[BsvDidService] Error resolving DID:', error);
-      throw error;
+      throw new Error(`DID resolution failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Resolve DID from local database
+   * Looks up DID documents stored during certificate creation
+   */
+  async resolveDIDFromDatabase(did) {
+    try {
+      // This would integrate with your existing MongoDB connection
+      // For now, we'll use a fetch to the existing API structure
+      const response = await fetch('/api/resolve-did', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ did: did }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.didDocument || null;
+      }
+
+      return null;
+
+    } catch (error) {
+      console.error('[BsvDidService] Database DID lookup failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Verify that a DID document is valid and properly formatted
+   */
+  validateDIDDocument(didDocument) {
+    try {
+      if (!didDocument || typeof didDocument !== 'object') {
+        return { valid: false, error: 'DID document must be an object' };
+      }
+
+      // Check required W3C DID fields
+      const requiredFields = ['@context', 'id', 'verificationMethod'];
+      for (const field of requiredFields) {
+        if (!didDocument[field]) {
+          return { valid: false, error: `Missing required field: ${field}` };
+        }
+      }
+
+      // Validate context
+      if (!Array.isArray(didDocument['@context']) || 
+          !didDocument['@context'].includes('https://www.w3.org/ns/did/v1')) {
+        return { valid: false, error: 'Invalid @context' };
+      }
+
+      // Validate verification methods
+      if (!Array.isArray(didDocument.verificationMethod) || 
+          didDocument.verificationMethod.length === 0) {
+        return { valid: false, error: 'DID document must have at least one verification method' };
+      }
+
+      return { valid: true };
+
+    } catch (error) {
+      return { valid: false, error: `Validation error: ${error.message}` };
     }
   }
 
