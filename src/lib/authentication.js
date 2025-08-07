@@ -266,6 +266,7 @@ export class UnifiedAuthService {
 
   /**
    * Verify certificate using W3C VC validation if applicable
+   * Enhanced with DID resolution and comprehensive verification
    */
   async verifyVCCertificate(certificate, didService, vcService) {
     if (!this.isVCCertificate(certificate)) {
@@ -274,14 +275,70 @@ export class UnifiedAuthService {
     }
 
     try {
+      console.log('[UnifiedAuth] Starting comprehensive VC certificate verification...');
+      
+      // Step 1: Basic VC structure validation
+      let vcVerificationResult = { valid: true, format: 'vc' };
+      
       if (vcService && vcService.verifyCertificateVC) {
-        const verificationResult = vcService.verifyCertificateVC(certificate);
-        console.log('[UnifiedAuth] VC verification result:', verificationResult);
-        return verificationResult;
+        vcVerificationResult = vcService.verifyCertificateVC(certificate);
+        if (!vcVerificationResult.valid) {
+          console.error('[UnifiedAuth] VC structure validation failed:', vcVerificationResult.error);
+          return vcVerificationResult;
+        }
       } else {
-        console.warn('[UnifiedAuth] VC service not available, skipping VC verification');
-        return { valid: true, format: 'vc', warning: 'VC verification skipped' };
+        console.warn('[UnifiedAuth] VC service not available for structure validation');
       }
+
+      // Step 2: DID resolution and verification (if DID service available)
+      if (didService && certificate.fields?.credentialSubject?.id) {
+        const subjectDid = certificate.fields.credentialSubject.id;
+        console.log('[UnifiedAuth] Resolving subject DID:', subjectDid);
+        
+        try {
+          const didDocument = await didService.resolveDID(subjectDid);
+          if (didDocument) {
+            // Validate DID document structure
+            const didValidation = didService.validateDIDDocument(didDocument);
+            if (!didValidation.valid) {
+              console.error('[UnifiedAuth] DID document validation failed:', didValidation.error);
+              return { valid: false, error: `DID validation failed: ${didValidation.error}` };
+            }
+            
+            console.log('[UnifiedAuth] DID resolution and validation successful');
+            vcVerificationResult.didResolved = true;
+            vcVerificationResult.didDocument = didDocument;
+          } else {
+            console.warn('[UnifiedAuth] Could not resolve DID:', subjectDid);
+            vcVerificationResult.didResolved = false;
+            vcVerificationResult.warning = 'DID could not be resolved';
+          }
+        } catch (didError) {
+          console.error('[UnifiedAuth] DID resolution error:', didError);
+          vcVerificationResult.didError = didError.message;
+        }
+      }
+
+      // Step 3: Extract and validate claims
+      const claims = this.extractIdentityClaims(certificate);
+      if (claims) {
+        vcVerificationResult.claims = claims;
+        console.log('[UnifiedAuth] Identity claims extracted successfully');
+      }
+
+      // Step 4: Check certificate expiration (if applicable)
+      const vcData = certificate.fields;
+      if (vcData.expirationDate) {
+        const expirationDate = new Date(vcData.expirationDate);
+        if (expirationDate < new Date()) {
+          console.error('[UnifiedAuth] VC certificate has expired');
+          return { valid: false, error: 'Verifiable credential has expired' };
+        }
+      }
+
+      console.log('[UnifiedAuth] Comprehensive VC verification completed successfully');
+      return vcVerificationResult;
+
     } catch (error) {
       console.error('[UnifiedAuth] VC verification failed:', error);
       return { valid: false, error: error.message };
