@@ -145,6 +145,10 @@ export default function Home() {
 
   //Verify user by email
   const handleEmailVerify = async () => {
+    if (!verificationCode || !email) {
+      toast.error("Please enter a verification code");
+      return;
+    }
     const verifyRes = await verifyCode(email, verificationCode);
 
     if (verifyRes.verificationStatus === false) {
@@ -171,6 +175,10 @@ export default function Home() {
 
   // Send email with verification code
   const handleSendEmail = async () => {
+    if (!email) {
+      toast.error("Please enter an email");
+      return;
+    }
     const emailResponse = await sendEmailFunc(email);
     
     if (!emailResponse?.sentStatus) {
@@ -308,6 +316,7 @@ export default function Home() {
                   <button
                     onClick={handleEmailVerify}
                     className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+                    disabled={!verificationCode || !email}
                   >
                     Verify
                   </button>
@@ -334,6 +343,7 @@ export default function Home() {
                   <button
                     onClick={handleSendEmail}
                     className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+                    disabled={!userWallet || !email}
                   >
                     Send
                   </button>
