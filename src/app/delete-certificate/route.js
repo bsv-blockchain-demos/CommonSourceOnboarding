@@ -60,12 +60,19 @@ export async function POST(req) {
         const unlockingScript = Utils.toHex([serialNumberBytes.length, ...serialNumberBytes]);
         console.log("Unlocking script:", unlockingScript);
 
-        // Try creating a transaction that spends from the basket
-        // The wallet should automatically find and use the outputs in the basket
+        // Create revocation transaction using inputs with unlockingScript
+        // This properly spends the revocation output with the correct unlocking script
         const tx = await wallet.createAction({
             description: 'Certificate revocation',
-            basket: `certificate revocation ${certificate.subject}`,
-            outputs: [] // No outputs - we're just burning the revocation token
+            inputBEEF: list.BEEF,
+            inputs: [
+                {
+                    inputDescription: 'Certificate revocation',
+                    basket: `certificate revocation ${certificate.subject}`,
+                    outpoint: output.outpoint,
+                    unlockingScript: unlockingScript,
+                }
+            ],
         });
         console.log("tx", tx);
 
