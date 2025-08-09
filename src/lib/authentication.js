@@ -120,69 +120,38 @@ export class UnifiedAuthService {
 
   /**
    * Check database for user certificate by public key
+   * TODO: Replace with BSV auth-middleware session-based certificate checking
+   * For now, disabled as certificates should be obtained through BSV handshake
    */
   async checkDatabaseForCertificate(userPubKey) {
     try {
-      const response = await fetch('/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ subject: userPubKey }),
-      });
-
-      if (!response.ok) {
-        return { found: false, certificate: null };
-      }
-
-      const data = await response.json();
-      
-      if (data?.certificate) {
-        return {
-          found: true,
-          certificate: data.certificate
-        };
-      }
-
+      // TODO: Implement BRC-103/104 compliant certificate checking
+      // The BSV auth middleware should provide certificates through req.auth
+      // Database lookup is not the standard pattern for BSV authentication
+      console.warn('[UnifiedAuth] Database certificate lookup disabled - use BSV auth middleware');
       return { found: false, certificate: null };
 
     } catch (error) {
-      console.error('[UnifiedAuth] Error checking database for certificate:', error);
+      console.error('[UnifiedAuth] Error in certificate checking:', error);
       return { found: false, certificate: null };
     }
   }
 
   /**
    * Save certificate to database for future retrieval
+   * TODO: Replace with BSV auth-middleware session management
+   * Certificates should be managed through BSV auth flow, not manual database saves
    */
-  async saveCertificateToDatabase(certificate, userPubKey) {
+  async saveCertificateToDatabase(_certificate, _userPubKey) {
     try {
-      const response = await fetch('/save-certificate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          certificate: certificate, 
-          subject: userPubKey 
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        console.log('[UnifiedAuth] Certificate saved to database successfully');
-        return { success: true };
-      } else if (data.message === 'User already has a certificate') {
-        console.log('[UnifiedAuth] Certificate already exists in database');
-        return { success: true, message: 'Already exists' };
-      } else {
-        console.error('[UnifiedAuth] Failed to save certificate:', data.message);
-        return { success: false, error: data.message };
-      }
+      // TODO: Implement BSV-compliant certificate management
+      // Certificates are exchanged during BRC-103 handshake and managed by middleware
+      // Manual database saves bypass the standard BSV authentication pattern
+      console.warn('[UnifiedAuth] Manual certificate saving disabled - use BSV auth middleware');
+      return { success: true, message: 'Certificate management handled by BSV auth' };
 
     } catch (error) {
-      console.error('[UnifiedAuth] Error saving certificate to database:', error);
+      console.error('[UnifiedAuth] Error in certificate management:', error);
       return { success: false, error: error.message };
     }
   }
