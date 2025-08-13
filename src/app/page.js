@@ -116,7 +116,7 @@ export default function Home() {
 
       // Acquire certificate with minimal fields to avoid size limits
       console.log('Acquiring certificate with minimal VC reference...');
-      
+
       // Only store minimal data in certificate fields due to encryption size limits
       // Full VC data will be stored in MongoDB separately
       const certResponse = await wallet.acquireCertificate({
@@ -132,10 +132,23 @@ export default function Home() {
         certifier: serverPubKey,
         certifierUrl: "http://localhost:8080",
       });
-      
+
       console.log('Certificate with VC data acquired:', certResponse);
       toast.success('Identity certificate generated successfully');
       setGenerated(true);
+
+      // On successful certificate generation, delete the email from the database
+      const res = await fetch('/emailVerify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, type: 'delete-on-generated' }),
+      });
+      if (!res.ok) {
+        toast.error("Something failed, please try again");
+        return;
+      }
 
     } catch (error) {
       console.error('Error generating certificate:', error);
@@ -162,7 +175,7 @@ export default function Home() {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, type: 'delete-on-verified' }), // For production change to 'verified'
+      body: JSON.stringify({ email, type: 'delete-on-verified' }),
     });
     if (!res.ok) {
       toast.error("Something failed, please try again");
@@ -180,7 +193,7 @@ export default function Home() {
       return;
     }
     const emailResponse = await sendEmailFunc(email);
-    
+
     if (!emailResponse?.sentStatus) {
       toast.error("Failed to send email");
       return;
@@ -279,22 +292,20 @@ export default function Home() {
               <button
                 onClick={handleCreateDid}
                 disabled={didCreated}
-                className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 mb-3 ${
-                  didCreated 
-                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed' 
+                className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 mb-3 ${didCreated
+                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
+                  }`}
               >
                 {didCreated ? 'DID Created ✓' : 'Create DID'}
               </button>
               <button
                 onClick={handleGenerateCert}
                 disabled={!didCreated}
-                className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 ${
-                  !didCreated
+                className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 ${!didCreated
                     ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
                     : 'bg-green-600 hover:bg-green-700 hover:cursor-pointer text-white'
-                }`}
+                  }`}
               >
                 Generate Certificate
               </button>

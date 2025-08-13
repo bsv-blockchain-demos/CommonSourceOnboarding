@@ -67,35 +67,35 @@ export async function POST(req) {
             return NextResponse.json({ verificationStatus: true }, { status: 200 });
         }
 
-        if (type === 'delete-on-verified') {
+        if (type === 'delete-on-generated') {
             await verifyCollection.deleteOne({ email });
             return NextResponse.json({ deletedStatus: true }, { status: 200 });
         }
 
-        // // For production change to this to always check if the user is verified
-        // if (type === 'check-verified') {
-        //     const user = await verifyCollection.findOne({ email });
+        // For production change to this to always check if the user is verified
+        if (type === 'check-verified') {
+            const user = await verifyCollection.findOne({ email });
 
-        //     if (!user) {
-        //         return NextResponse.json({ verificationStatus: false, message: "User not found" }, { status: 400 });
-        //     }
+            if (!user) {
+                return NextResponse.json({ verificationStatus: false, message: "User not found" }, { status: 400 });
+            }
 
-        //     if (!user.verified) {
-        //         return NextResponse.json({ verificationStatus: false, message: "Not verified" }, { status: 400 });
-        //     }
+            if (!user.verified) {
+                return NextResponse.json({ verificationStatus: false, message: "Not verified" }, { status: 400 });
+            }
 
-        //     if (Date.now() > user.verifiedExpirationTime) {
-        //         await verifyCollection.updateOne({ email }, { $set: { verified: false, verifiedExpirationTime: null } });
-        //         return NextResponse.json({ verificationStatus: false, message: "Verification expired" }, { status: 400 });
-        //     }
+            if (Date.now() > user.verifiedExpirationTime) {
+                await verifyCollection.updateOne({ email }, { $set: { verified: false, verifiedExpirationTime: null } });
+                return NextResponse.json({ verificationStatus: false, message: "Verification expired" }, { status: 400 });
+            }
 
-        //     return NextResponse.json({ verificationStatus: true }, { status: 200 });
-        // }
+            return NextResponse.json({ verificationStatus: true }, { status: 200 });
+        }
 
-        // if (type === 'verified') {
-        //     await verifyCollection.updateOne({ email }, { $set: { verified: true, verifiedExpirationTime: Date.now() + 604800000 } }); // 7 days
-        //     return NextResponse.json({ verifiedStatus: true }, { status: 200 });
-        // }
+        if (type === 'verified') {
+            await verifyCollection.updateOne({ email }, { $set: { verified: true, verifiedExpirationTime: Date.now() + 604800000 } }); // 7 days
+            return NextResponse.json({ verifiedStatus: true }, { status: 200 });
+        }
     } catch (error) {
         console.log(JSON.stringify(error));
         return NextResponse.json({ verificationStatus: false, message: "Something went wrong" }, { status: 400 });
