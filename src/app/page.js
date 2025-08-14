@@ -8,6 +8,10 @@ import { Utils } from "@bsv/sdk";
 import { toast } from 'react-hot-toast';
 import { useAuthContext } from "../context/authContext";
 import LoggedInPage from "../components/loggedInPage";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 
 export default function Home() {
   const [username, setUsername] = useState('');
@@ -17,7 +21,7 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [work, setWork] = useState('');
   // Skip email verification for testing
-  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(true);
   const [emailSent, setEmailSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [generated, setGenerated] = useState(false);
@@ -142,23 +146,10 @@ export default function Home() {
         certifier: serverPubKey,
         certifierUrl: "http://localhost:8080",
       });
-
+      
       console.log('Certificate with VC data acquired:', certResponse);
       toast.success('Identity certificate generated successfully');
       setGenerated(true);
-
-      // On successful certificate generation, delete the email from the database
-      const res = await fetch('/emailVerify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, type: 'delete-on-generated' }),
-      });
-      if (!res.ok) {
-        toast.error("Something failed, please try again");
-        return;
-      }
 
     } catch (error) {
       console.error('Error generating certificate:', error);
@@ -168,10 +159,6 @@ export default function Home() {
 
   //Verify user by email
   const handleEmailVerify = async () => {
-    if (!verificationCode || !email) {
-      toast.error("Please enter a verification code");
-      return;
-    }
     const verifyRes = await verifyCode(email, verificationCode);
 
     if (verifyRes.verificationStatus === false) {
@@ -185,7 +172,7 @@ export default function Home() {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, type: 'delete-on-verified' }),
+      body: JSON.stringify({ email, type: 'delete-on-verified' }), // For production change to 'verified'
     });
     if (!res.ok) {
       toast.error("Something failed, please try again");
@@ -198,12 +185,8 @@ export default function Home() {
 
   // Send email with verification code
   const handleSendEmail = async () => {
-    if (!email) {
-      toast.error("Please enter an email");
-      return;
-    }
     const emailResponse = await sendEmailFunc(email);
-
+    
     if (!emailResponse?.sentStatus) {
       toast.error("Failed to send email");
       return;
@@ -219,41 +202,11 @@ export default function Home() {
 
   if (generated && !certificate) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white">
-        {/* Header Navigation */}
-        <header className="bg-slate-800 shadow-lg w-full">
-          <div className="w-full px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center py-8 relative min-h-[80px] w-full">
-              {/* Logo on the left */}
-              <div className="flex items-center space-x-4 absolute left-4">
-                <div className="w-12 h-12 bg-teal-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-xl">🔗</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xl font-semibold text-teal-400 leading-tight">COMMONSource</span>
-                  <span className="text-sm text-gray-300 leading-tight">IDENTITY PLATFORM</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
-        
-        <div className="flex items-center justify-center min-h-[calc(100vh-80px)] p-4">
-          <div className="max-w-md w-full space-y-6">
-            <div className="text-center space-y-6">
-              <div className="bg-slate-800 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-teal-400 mb-4">Certificate generated successfully</h3>
-                <p className="text-gray-300">Welcome to COMMONSource! Click "Login" to continue.</p>
-              </div>
-              
-              <button
-                onClick={handleLogin}
-                className="inline-block bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 focus:ring-offset-slate-900"
-              >
-                Login
-              </button>
-            </div>
-          </div>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="absolute top-4 right-4">
+          <Button onClick={handleLogin}>
+            Login
+          </Button>
         </div>
       </div>
     )
@@ -261,162 +214,169 @@ export default function Home() {
 
   if (certificate) {
     return (
-      <LoggedInPage />
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <LoggedInPage />
+      </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      {/* Header Navigation */}
-      <header className="bg-slate-800 shadow-lg w-full">
-        <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center py-8 relative min-h-[80px] w-full">
-            {/* Logo on the left */}
-            <div className="flex items-center space-x-4 absolute left-4">
-              <div className="w-12 h-12 bg-teal-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-xl">🔗</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xl font-semibold text-teal-400 leading-tight">COMMONSource</span>
-                <span className="text-sm text-gray-300 leading-tight">IDENTITY PLATFORM</span>
-              </div>
-            </div>
-            
-            {/* Wallet button on the right */}
-            <button
-              onClick={initializeWallet}
-              disabled={userWallet}
-              className="absolute right-4 bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {userWallet ? "Wallet Connected" : "Connect Wallet"}
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="absolute top-4 right-4">
+        <Button
+          onClick={initializeWallet}
+          disabled={userWallet}
+          variant={userWallet ? "secondary" : "default"}
+        >
+          {userWallet ? "Wallet Connected" : "Connect Wallet"}
+        </Button>
+      </div>
 
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] p-4">
-        <div className="w-full max-w-md">
+      <div className="w-full max-w-md">
         {emailVerified ? (
-          <div className="bg-slate-800 rounded-lg p-8 shadow-xl">
-            <h1 className="text-2xl font-semibold text-white mb-6 text-center">User Information</h1>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-              <input
-                type="text"
-                placeholder="Residence"
-                value={residence}
-                onChange={(e) => setResidence(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-              <input
-                type="text"
-                placeholder="Age"
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-              <input
-                type="text"
-                placeholder="Gender"
-                value={gender}
-                onChange={(e) => setGender(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-              <input
-                type="text"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-              <input
-                type="text"
-                placeholder="Work"
-                value={work}
-                onChange={(e) => setWork(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-              <button
-                onClick={handleCreateDid}
-                disabled={didCreated}
-                className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 mb-3 ${didCreated
-                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
-              >
-                {didCreated ? 'DID Created ✓' : 'Create DID'}
-              </button>
-              <button
-                onClick={handleGenerateCert}
-                disabled={!didCreated}
-                className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 ${!didCreated
-                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                    : 'bg-teal-600 hover:bg-teal-700 hover:cursor-pointer text-white'
-                  }`}
-              >
-                Generate Certificate
-              </button>
-            </div>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-center">User Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="residence">Residence</Label>
+                <Input
+                  id="residence"
+                  type="text"
+                  placeholder="Enter your residence"
+                  value={residence}
+                  onChange={(e) => setResidence(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="age">Age</Label>
+                <Input
+                  id="age"
+                  type="number"
+                  placeholder="Enter your age"
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gender">Gender</Label>
+                <Input
+                  id="gender"
+                  type="text"
+                  placeholder="Enter your gender"
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="work">Work</Label>
+                <Input
+                  id="work"
+                  type="text"
+                  placeholder="Enter your work/occupation"
+                  value={work}
+                  onChange={(e) => setWork(e.target.value)}
+                />
+              </div>
+              <div className="space-y-3 pt-4">
+                <Button
+                  onClick={handleCreateDid}
+                  disabled={didCreated}
+                  variant={didCreated ? "secondary" : "default"}
+                  className="w-full"
+                >
+                  {didCreated ? 'DID Created ✓' : 'Create DID'}
+                </Button>
+                <Button
+                  onClick={handleGenerateCert}
+                  disabled={!didCreated}
+                  variant={!didCreated ? "secondary" : "default"}
+                  className="w-full"
+                >
+                  Generate Certificate
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="bg-slate-800 rounded-lg p-8 shadow-xl">
+          <Card>
             {emailSent ? (
-              <div>
-                <h1 className="text-2xl font-semibold text-white mb-6 text-center">Check your email for a verification code</h1>
-                <div className="space-y-4">
-                  <input
-                    type="text"
-                    placeholder="Verification Code"
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  />
-                  <button
-                    onClick={handleEmailVerify}
-                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
-                    disabled={!verificationCode || !email}
-                  >
-                    Verify
-                  </button>
-                  <button
-                    onClick={() => setEmailSent(false)}
-                    className="w-full bg-transparent border border-slate-600 text-slate-300 hover:text-white hover:border-slate-500 font-medium py-3 px-4 rounded-lg transition-colors duration-200"
-                  >
-                    Go back
-                  </button>
-                </div>
-              </div>
+              <CardHeader>
+                <CardTitle className="text-center">Check your email for a verification code</CardTitle>
+              </CardHeader>
             ) : (
-              <div>
-                <h1 className="text-2xl font-semibold text-white mb-2 text-center">Certify your identity using your email address</h1>
-                <p className="text-slate-400 text-center mb-6">We&apos;ll send you an email to verify</p>
-                <div className="space-y-4">
-                  <input
-                    type="email"
-                    placeholder="example@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  />
-                  <button
-                    onClick={handleSendEmail}
-                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
-                    disabled={!userWallet || !email}
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
+              <CardHeader>
+                <CardTitle className="text-center">Certify your identity using your email address</CardTitle>
+                <p className="text-muted-foreground text-center">We'll send you an email to verify</p>
+              </CardHeader>
             )}
-          </div>
+            <CardContent className="space-y-4">
+              {emailSent ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="verification-code">Verification Code</Label>
+                    <Input
+                      id="verification-code"
+                      type="text"
+                      placeholder="Enter verification code"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Button onClick={handleEmailVerify} className="w-full">
+                      Verify
+                    </Button>
+                    <Button 
+                      onClick={() => setEmailSent(false)} 
+                      variant="outline" 
+                      className="w-full"
+                    >
+                      Go back
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="email-verify">Email Address</Label>
+                    <Input
+                      id="email-verify"
+                      type="email"
+                      placeholder="example@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <Button onClick={handleSendEmail} className="w-full">
+                    Send Verification Code
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
         )}
-        </div>
       </div>
     </div>
   );
