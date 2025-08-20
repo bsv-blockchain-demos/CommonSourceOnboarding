@@ -17,7 +17,7 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [work, setWork] = useState('');
   // Skip email verification for testing
-  const [emailVerified, setEmailVerified] = useState(true);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [generated, setGenerated] = useState(false);
@@ -209,14 +209,37 @@ export default function Home() {
 
   if (generated && !certificate) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="absolute top-4 right-4">
-          <button
-            onClick={handleLogin}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Login
-          </button>
+      <div className="min-h-screen bg-slate-900 text-white">
+        {/* Header Navigation */}
+        <header className="bg-slate-800 shadow-lg w-full">
+          <div className="w-full px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center py-8 relative min-h-[80px] w-full">
+              {/* Logo on the left */}
+              <div className="flex items-center space-x-4 absolute left-4">
+                <div className="w-12 h-12 bg-teal-600 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-xl">🔗</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xl font-semibold text-teal-400 leading-tight">COMMONSource</span>
+                  <span className="text-sm text-gray-300 leading-tight">IDENTITY PLATFORM</span>
+                </div>
+              </div>
+              
+              {/* Login button on the right */}
+              <button
+                onClick={handleLogin}
+                className="absolute right-4 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+              >
+                Login
+              </button>
+            </div>
+          </div>
+        </header>
+        
+        <div className="flex items-center justify-center min-h-[calc(100vh-80px)] p-4">
+          <div className="text-center text-gray-300">
+            <p>Certificate generated successfully! Please login to continue.</p>
+          </div>
         </div>
       </div>
     )
@@ -229,18 +252,36 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      <div className="absolute top-4 right-4">
-        <button
-          onClick={initializeWallet}
-          disabled={userWallet}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {userWallet ? "Wallet Connected" : "Connect Wallet"}
-        </button>
-      </div>
+    <div className="min-h-screen bg-slate-900 text-white">
+      {/* Header Navigation */}
+      <header className="bg-slate-800 shadow-lg w-full">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center py-8 relative min-h-[80px] w-full">
+            {/* Logo on the left */}
+            <div className="flex items-center space-x-4 absolute left-4">
+              <div className="w-12 h-12 bg-teal-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-xl">🔗</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xl font-semibold text-teal-400 leading-tight">COMMONSource</span>
+                <span className="text-sm text-gray-300 leading-tight">IDENTITY PLATFORM</span>
+              </div>
+            </div>
+            
+            {/* Wallet button on the right */}
+            <button
+              onClick={initializeWallet}
+              disabled={userWallet}
+              className="absolute right-4 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {userWallet ? "Wallet Connected" : "Connect Wallet"}
+            </button>
+          </div>
+        </div>
+      </header>
 
-      <div className="w-full max-w-md">
+      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] p-4">
+        <div className="w-full max-w-md">
         {emailVerified ? (
           <div className="bg-slate-800 rounded-lg p-8 shadow-xl">
             <h1 className="text-2xl font-semibold text-white mb-6 text-center">User Information</h1>
@@ -361,6 +402,7 @@ export default function Home() {
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );
