@@ -224,21 +224,25 @@ export default function Home() {
                   <span className="text-sm text-gray-300 leading-tight">IDENTITY PLATFORM</span>
                 </div>
               </div>
-              
-              {/* Login button on the right */}
-              <button
-                onClick={handleLogin}
-                className="absolute right-4 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-900"
-              >
-                Login
-              </button>
             </div>
           </div>
         </header>
         
         <div className="flex items-center justify-center min-h-[calc(100vh-80px)] p-4">
-          <div className="text-center text-gray-300">
-            <p>Certificate generated successfully! Please login to continue.</p>
+          <div className="max-w-md w-full space-y-6">
+            <div className="text-center space-y-6">
+              <div className="bg-slate-800 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-teal-400 mb-4">Certificate generated successfully</h3>
+                <p className="text-gray-300">Welcome to COMMONSource! Click "Login" to continue.</p>
+              </div>
+              
+              <button
+                onClick={handleLogin}
+                className="inline-block bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+              >
+                Login
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -272,7 +276,7 @@ export default function Home() {
             <button
               onClick={initializeWallet}
               disabled={userWallet}
-              className="absolute right-4 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="absolute right-4 bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {userWallet ? "Wallet Connected" : "Connect Wallet"}
             </button>
@@ -291,42 +295,42 @@ export default function Home() {
                 placeholder="Username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
               <input
                 type="text"
                 placeholder="Residence"
                 value={residence}
                 onChange={(e) => setResidence(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
               <input
                 type="text"
                 placeholder="Age"
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
               <input
                 type="text"
                 placeholder="Gender"
                 value={gender}
                 onChange={(e) => setGender(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
               <input
                 type="text"
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
               <input
                 type="text"
                 placeholder="Work"
                 value={work}
                 onChange={(e) => setWork(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
               <button
                 onClick={handleCreateDid}
@@ -343,7 +347,7 @@ export default function Home() {
                 disabled={!didCreated}
                 className={`w-full font-medium py-3 px-4 rounded-lg transition-colors duration-200 ${!didCreated
                     ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700 hover:cursor-pointer text-white'
+                    : 'bg-teal-600 hover:bg-teal-700 hover:cursor-pointer text-white'
                   }`}
               >
                 Generate Certificate
@@ -361,11 +365,11 @@ export default function Home() {
                     placeholder="Verification Code"
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   />
                   <button
                     onClick={handleEmailVerify}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
                     disabled={!verificationCode || !email}
                   >
                     Verify
@@ -388,11 +392,11 @@ export default function Home() {
                     placeholder="example@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   />
                   <button
                     onClick={handleSendEmail}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
                     disabled={!userWallet || !email}
                   >
                     Send
