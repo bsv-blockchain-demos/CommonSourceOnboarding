@@ -10,13 +10,28 @@ if (!uri) {
   throw new Error('MongoDB URI is required. Please set MONGODB_URI environment variable.');
 }
 
+// Modify URI to include SSL parameters if not already present
+let connectionUri = uri;
+if (!uri.includes('ssl=') && !uri.includes('tls=')) {
+  const separator = uri.includes('?') ? '&' : '?';
+  connectionUri = `${uri}${separator}ssl=true&tlsAllowInvalidCertificates=true&tlsAllowInvalidHostnames=true`;
+}
+
+console.log('[Frontend Mongo] Final connection URI (partial):', connectionUri.substring(0, 50) + '...');
+
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
+const client = new MongoClient(connectionUri, {
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  }
+  },
+  // Minimal connection options to avoid conflicts
+  connectTimeoutMS: 30000, // 30 seconds
+  socketTimeoutMS: 45000, // 45 seconds
+  serverSelectionTimeoutMS: 30000, // How long to try to connect
+  maxPoolSize: 10,
+  retryWrites: true
 });
 
 // Database and collections
