@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
 import { useWalletContext } from "../context/walletContext";
 import { useDidContext } from "../context/DidContext";
@@ -36,7 +36,7 @@ export default function Home() {
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
 
   // Check for existing DID when wallet is connected
-  const checkExistingDid = async (publicKey) => {
+  const checkExistingDid = useCallback(async (publicKey) => {
     if (!publicKey || checkingDid) return;
     
     setCheckingDid(true);
@@ -69,7 +69,7 @@ export default function Home() {
     } finally {
       setCheckingDid(false);
     }
-  };
+  }, [checkingDid]);
 
   // Check for existing DID when wallet connects
   useEffect(() => {
@@ -77,7 +77,7 @@ export default function Home() {
       console.log('Checking for existing DID for user:', userPubKey);
       checkExistingDid(userPubKey);
     }
-  }, [userPubKey, certificate, existingDidFound, checkingDid]);
+  }, [userPubKey, certificate, existingDidFound, checkingDid, checkExistingDid]);
 
   const handleCreateDid = async () => {
     try {
@@ -399,7 +399,7 @@ export default function Home() {
             ) : (
               <CardHeader>
                 <CardTitle className="text-center">Certify your identity using your email address</CardTitle>
-                <p className="text-muted-foreground text-center">We'll send you an email to verify</p>
+                <p className="text-muted-foreground text-center">We&apos;ll send you an email to verify</p>
               </CardHeader>
             )}
             <CardContent className="space-y-4">
