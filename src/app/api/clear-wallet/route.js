@@ -6,12 +6,13 @@ export async function POST(req) {
         const userWallet = new WalletClient('auto', 'localhost');
         
         // List all certificates first
-        const certificates = await userWallet.listCertificates({
+        const certificatesResponse = await userWallet.listCertificates({
             certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY],
-            type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))
+            types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
         });
         
-        console.log('Found certificates:', certificates);
+        console.log('Found certificates response:', certificatesResponse);
+        const certificates = certificatesResponse.certificates || [];
         
         // Relinquish all certificates
         const results = [];
@@ -30,6 +31,7 @@ export async function POST(req) {
         
         return NextResponse.json({ 
             message: 'Wallet clearing attempted',
+            totalCertificates: certificatesResponse.totalCertificates || 0,
             certificatesFound: certificates.length,
             results 
         });

@@ -1,5 +1,4 @@
 import {
-    WalletClient,
     PrivateKey,
     KeyDeriver,
     verifyNonce,
@@ -235,19 +234,16 @@ export async function signCertificate(req, res) {
         
         console.log(`Certificate would be saved for subject: ${documentId}, VC format: ${isVCCertificate} (MongoDB disabled temporarily)`);
         
-        // Format response for BSV SDK's acquireCertificate method
-        const protocolResponse = {
-            protocol: 'issuance',
-            certificate: signedCertificate,
-            serverNonce: serverNonce,
-            timestamp: new Date().toISOString(),
-            version: '1.0'
-        };
+        // BSV SDK's acquireCertificate expects just the certificate object
+        // Not wrapped in any protocol response
+        console.log('Returning signed certificate directly to BSV SDK');
+        console.log('Certificate type:', signedCertificate.type);
+        console.log('Certificate serialNumber:', signedCertificate.serialNumber);
+        console.log('Certificate subject:', signedCertificate.subject);
+        console.log('Certificate certifier:', signedCertificate.certifier);
         
-        console.log('Returning certificate response with protocol wrapper:', protocolResponse);
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('X-Certificate-Protocol', 'issuance');
-        return res.json(protocolResponse);
+        return res.json(signedCertificate);
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
