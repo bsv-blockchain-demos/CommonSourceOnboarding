@@ -3,11 +3,13 @@ import { NextResponse } from "next/server";
 import { TransactionalEmailsApi, TransactionalEmailsApiApiKeys } from "@getbrevo/brevo";
 
 // Set Brevo API
-const brevoAPIKey = process.env.BREVO_API_KEY.trim();
+const brevoAPIKey = process.env.BREVO_API_KEY?.trim() || '';
 let mailer = new TransactionalEmailsApi();
-mailer.setApiKey(TransactionalEmailsApiApiKeys.apiKey, brevoAPIKey);
+if (brevoAPIKey) {
+  mailer.setApiKey(TransactionalEmailsApiApiKeys.apiKey, brevoAPIKey);
+}
 
-const emailSender = process.env.SENDER_EMAIL.trim();
+const emailSender = process.env.SENDER_EMAIL?.trim() || 'noreply@example.com';
 
 export async function POST(req) {
     const body = await req.json();
