@@ -240,6 +240,7 @@ export async function signCertificate(req, res) {
         console.log('CERT DEBUG - Signature length:', signedCertificate.signature?.length);
         
         // Convert Certificate object to plain object for JSON serialization
+        // Ensure fields is an object, not an array or null
         const certificateForResponse = {
             type: signedCertificate.type,
             serialNumber: signedCertificate.serialNumber,
@@ -247,8 +248,11 @@ export async function signCertificate(req, res) {
             certifier: signedCertificate.certifier,
             revocationOutpoint: signedCertificate.revocationOutpoint,
             signature: signedCertificate.signature,
-            fields: signedCertificate.fields
+            fields: signedCertificate.fields || {}
         };
+        
+        console.log('CERT DEBUG - Fields type:', typeof certificateForResponse.fields);
+        console.log('CERT DEBUG - Fields is array:', Array.isArray(certificateForResponse.fields));
         
         console.log('CERT RESPONSE - All fields present:', {
             type: !!certificateForResponse.type,
@@ -260,13 +264,16 @@ export async function signCertificate(req, res) {
             fields: !!certificateForResponse.fields
         });
         
-        // Return certificate directly without BSV auth middleware wrapping
-        console.log('Returning certificate directly (no auth middleware)');
+        // Try returning the original Certificate object instead of plain object
+        console.log('Returning original Certificate object directly (no auth middleware)');
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Headers', '*');
         res.setHeader('Access-Control-Allow-Methods', '*');
-        return res.status(200).json(certificateForResponse);
+        
+        // Try both formats to see which works
+        console.log('CERT DEBUG - Trying original Certificate object');
+        return res.status(200).json(signedCertificate);
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
