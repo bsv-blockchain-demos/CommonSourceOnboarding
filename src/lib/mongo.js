@@ -41,7 +41,7 @@ async function connectToMongo() {
       await verifyCollection.createIndex({ "code": 1 });
       await verifyCollection.createIndex({ "expirationTime": 1 });
       
-      await usersCollection.createIndex({ id: 1 }, { unique: true });
+      // Note: _id is automatically unique in MongoDB, no need for custom id field
       
       console.log("MongoDB indexes created successfully");
     } catch (error) {
