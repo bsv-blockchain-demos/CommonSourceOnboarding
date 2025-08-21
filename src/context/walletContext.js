@@ -15,7 +15,9 @@ export const WalletContextProvider = ({ children }) => {
     // Initialize the user's wallet
     const initializeWallet = useCallback(async () => {
         try {
-            const newWallet = new WalletClient('auto', 'localhost');
+            // Use 'auto' mode to auto-detect the wallet provider
+            // Don't specify localhost - let it use the default configuration
+            const newWallet = new WalletClient('auto');
 
             const isConnected = await newWallet.isAuthenticated();
             if (!isConnected) {

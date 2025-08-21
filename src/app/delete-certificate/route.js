@@ -221,7 +221,7 @@ export async function POST(req) {
         }
 
         // Call relinquish certificate
-        const userWallet = new WalletClient('auto', 'localhost');
+        const userWallet = new WalletClient('auto');
         const relinquishResponse = await userWallet.relinquishCertificate({
             type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
             serialNumber: certificate.serialNumber,

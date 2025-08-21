@@ -3,7 +3,7 @@ import { WalletClient, Utils } from "@bsv/sdk";
 
 export async function POST(req) {
     try {
-        const userWallet = new WalletClient('auto', 'localhost');
+        const userWallet = new WalletClient('auto');
         
         // List all certificates first
         const certificatesResponse = await userWallet.listCertificates({
