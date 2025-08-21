@@ -36,10 +36,7 @@ async function makeWallet(chain, storageURL, privateKey) {
 
 export async function signCertificate(req, res) {
     console.log('=== Certificate signing request received ===');
-    console.log('Request method:', req.method);
-    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    console.log('Auth object:', JSON.stringify(req.auth, null, 2));
+    console.log('Auth identityKey:', req.auth?.identityKey);
     try {
         // Body response from Metanet desktop walletclient
         const body = req.body;
@@ -67,23 +64,10 @@ export async function signCertificate(req, res) {
             subject
         );
 
-        console.log({ decryptedFields }) // PRODUCTION: actually check if we believe this before attesting to it
+        console.log('Fields decrypted, isVC:', decryptedFields?.isVC);
         
         // Check if this is a VC-structured certificate (new format)
         const isVCCertificate = decryptedFields && decryptedFields.isVC === 'true';
-        
-        if (isVCCertificate) {
-            console.log('Processing W3C VC-structured certificate with minimal fields');
-            // For VC certificates, we store the full VC data in MongoDB separately
-            // The certificate itself only contains minimal reference fields
-            console.log('Certificate fields:', {
-                username: decryptedFields.username,
-                email: decryptedFields.email,
-                didRef: decryptedFields.didRef
-            });
-        } else {
-            console.log('Processing legacy certificate format');
-        }
 
         // Verify client nonce for replay protection
         console.log('Verifying client nonce for replay protection...');
@@ -249,9 +233,9 @@ export async function signCertificate(req, res) {
         console.log('Certificate subject:', signedCertificate.subject);
         console.log('Certificate certifier:', signedCertificate.certifier);
         
-        // Try returning the Certificate object directly first
-        console.log('Certificate class check:', signedCertificate.constructor.name);
-        console.log('Certificate properties:', Object.getOwnPropertyNames(signedCertificate));
+        // CRITICAL: Check if certificate has signature
+        console.log('CERT DEBUG - Has signature:', !!signedCertificate.signature);
+        console.log('CERT DEBUG - Signature length:', signedCertificate.signature?.length);
         
         // Convert Certificate object to plain object for JSON serialization
         const certificateForResponse = {
@@ -264,7 +248,15 @@ export async function signCertificate(req, res) {
             fields: signedCertificate.fields
         };
         
-        console.log('Certificate response object:', JSON.stringify(certificateForResponse, null, 2));
+        console.log('CERT RESPONSE - All fields present:', {
+            type: !!certificateForResponse.type,
+            serialNumber: !!certificateForResponse.serialNumber,
+            subject: !!certificateForResponse.subject,
+            certifier: !!certificateForResponse.certifier,
+            revocationOutpoint: !!certificateForResponse.revocationOutpoint,
+            signature: !!certificateForResponse.signature,
+            fields: !!certificateForResponse.fields
+        });
         
         // Ensure we return HTTP 200 explicitly
         res.status(200);
