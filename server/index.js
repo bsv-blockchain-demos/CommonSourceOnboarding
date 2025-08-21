@@ -103,6 +103,11 @@ app.use(authMiddleware)
 // Add request logging middleware
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  if (req.path === '/signCertificate') {
+    console.log('[REQUEST] signCertificate endpoint hit');
+    console.log('[REQUEST] Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[REQUEST] Body preview:', JSON.stringify(req.body, null, 2));
+  }
   next();
 });
 

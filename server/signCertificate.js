@@ -36,7 +36,10 @@ async function makeWallet(chain, storageURL, privateKey) {
 
 export async function signCertificate(req, res) {
     console.log('=== Certificate signing request received ===');
+    console.log('Request method:', req.method);
+    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
     console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Auth object:', JSON.stringify(req.auth, null, 2));
     try {
         // Body response from Metanet desktop walletclient
         const body = req.body;
