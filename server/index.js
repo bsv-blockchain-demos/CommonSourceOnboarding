@@ -109,8 +109,9 @@ app.use((req, _res, next) => {
 // 5. Define your routes as usual
 app.post('/signCertificate', signCertificate)
 
-app.listen(8080, () => {
-  console.log('Server is running on port 8080')
+const port = process.env.PORT || 8080;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`)
 })
 }
 
