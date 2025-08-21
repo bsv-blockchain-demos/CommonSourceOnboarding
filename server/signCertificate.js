@@ -11,7 +11,8 @@ import {
     Hash
 } from '@bsv/sdk'
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
-import { connectToMongo, usersCollection } from './mongo.js'
+// Temporarily comment out MongoDB import to get server running
+// import { connectToMongo, usersCollection } from './mongo.js'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -163,18 +164,19 @@ export async function signCertificate(req, res) {
 
         // Save certificate in database
         // EX: {subject: subject, certificate: signedCertificate}
-        await connectToMongo();
+        // Temporarily comment out MongoDB operations to get server running
+        // await connectToMongo();
 
         // Check for existing DID to enable identity continuity across certificate renewals
-        const existingRecord = await usersCollection.findOne({ _id: subject });
+        // const existingRecord = await usersCollection.findOne({ _id: subject });
         let existingDid = null;
         
-        if (existingRecord) {
-            console.log('User has existing record, preserving DID for continuity:', subject);
-            // Preserve the existing DID for identity continuity
-            // This allows users to revoke and re-certify without creating a new identity
-            existingDid = existingRecord.did;
-        }
+        // if (existingRecord) {
+        //     console.log('User has existing record, preserving DID for continuity:', subject);
+        //     // Preserve the existing DID for identity continuity
+        //     // This allows users to revoke and re-certify without creating a new identity
+        //     existingDid = existingRecord.did;
+        // }
         
         // Prepare document for database
         const documentToSave = { 
@@ -230,12 +232,13 @@ export async function signCertificate(req, res) {
             throw new Error('Document ID is null or undefined - cannot save certificate');
         }
         
-        await usersCollection.updateOne({ _id: documentId }, 
-            { $set: documentToSave },
-            { upsert: true }
-        );
+        // Temporarily comment out database save operation
+        // await usersCollection.updateOne({ _id: documentId }, 
+        //     { $set: documentToSave },
+        //     { upsert: true }
+        // );
         
-        console.log(`Certificate saved for subject: ${documentId}, VC format: ${isVCCertificate}`);
+        console.log(`Certificate would be saved for subject: ${documentId}, VC format: ${isVCCertificate} (MongoDB disabled temporarily)`);
         
         // Format response for BSV SDK's acquireCertificate method
         const protocolResponse = {

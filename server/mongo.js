@@ -12,27 +12,28 @@ if (!uri) {
 
 console.log('[Server Mongo] Using MongoDB URI (partial):', uri.substring(0, 20) + '...');
 
+// Modify URI to include SSL parameters if not already present
+let connectionUri = uri;
+if (!uri.includes('ssl=') && !uri.includes('tls=')) {
+  const separator = uri.includes('?') ? '&' : '?';
+  connectionUri = `${uri}${separator}ssl=true&tlsAllowInvalidCertificates=true&tlsAllowInvalidHostnames=true`;
+}
+
+console.log('[Server Mongo] Final connection URI (partial):', connectionUri.substring(0, 50) + '...');
+
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
+const client = new MongoClient(connectionUri, {
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
   },
-  // Additional connection options to handle Railway/Atlas SSL issues
-  tls: true,
-  tlsAllowInvalidCertificates: true, // This helps with SSL certificate validation issues
-  tlsAllowInvalidHostnames: true,
+  // Minimal connection options to avoid conflicts
   connectTimeoutMS: 30000, // 30 seconds
   socketTimeoutMS: 45000, // 45 seconds
-  maxPoolSize: 10,
-  minPoolSize: 1,
-  maxIdleTimeMS: 30000,
   serverSelectionTimeoutMS: 30000, // How long to try to connect
-  heartbeatFrequencyMS: 10000,
-  // Add retry options
-  retryWrites: true,
-  retryReads: true
+  maxPoolSize: 10,
+  retryWrites: true
 });
 
 // Database and collections
