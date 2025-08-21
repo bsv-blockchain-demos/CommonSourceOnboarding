@@ -260,9 +260,13 @@ export async function signCertificate(req, res) {
             fields: !!certificateForResponse.fields
         });
         
-        // Let BSV auth middleware handle the response - don't set manual headers
-        console.log('Returning certificate through BSV auth middleware');
-        return res.json(certificateForResponse);
+        // Return certificate directly without BSV auth middleware wrapping
+        console.log('Returning certificate directly (no auth middleware)');
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+        res.setHeader('Access-Control-Allow-Methods', '*');
+        return res.status(200).json(certificateForResponse);
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
