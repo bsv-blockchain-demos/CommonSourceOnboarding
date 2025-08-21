@@ -208,7 +208,7 @@ export default function Home() {
           email: email,
           work: work,
           // VC metadata
-          isVC: 'true',
+          isVC: "true",
           didRef: didRef
         },
         acquisitionProtocol: "issuance",
