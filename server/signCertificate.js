@@ -249,6 +249,10 @@ export async function signCertificate(req, res) {
         console.log('Certificate subject:', signedCertificate.subject);
         console.log('Certificate certifier:', signedCertificate.certifier);
         
+        // Try returning the Certificate object directly first
+        console.log('Certificate class check:', signedCertificate.constructor.name);
+        console.log('Certificate properties:', Object.getOwnPropertyNames(signedCertificate));
+        
         // Convert Certificate object to plain object for JSON serialization
         const certificateForResponse = {
             type: signedCertificate.type,
@@ -262,7 +266,14 @@ export async function signCertificate(req, res) {
         
         console.log('Certificate response object:', JSON.stringify(certificateForResponse, null, 2));
         
+        // Ensure we return HTTP 200 explicitly
+        res.status(200);
         res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+        res.setHeader('Access-Control-Allow-Methods', '*');
+        
+        console.log('Sending response with status 200');
         return res.json(certificateForResponse);
     } catch (error) {
         console.error('Certificate signing error:', error);
