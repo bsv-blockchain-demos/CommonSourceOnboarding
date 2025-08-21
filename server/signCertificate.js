@@ -36,23 +36,25 @@ async function makeWallet(chain, storageURL, privateKey) {
 
 export async function signCertificate(req, res) {
     console.log('=== Certificate signing request received ===');
-    console.log('Auth identityKey:', req.auth?.identityKey);
+    console.log('Request has BSV auth headers:', !!req.headers['x-bsv-auth-identity-key']);
+    
     try {
         // Body response from Metanet desktop walletclient
         const body = req.body;
         const { clientNonce, type, fields, masterKeyring } = body;
+        
+        // Extract subject from BSV auth headers since we're not using auth middleware
+        const subject = req.headers['x-bsv-auth-identity-key'];
+        console.log('[signCertificate] Subject from headers:', subject);
+        
+        if (!subject) {
+            console.error('[signCertificate] No subject identity key found in headers');
+            return res.status(400).json({ error: 'Missing identity key in request headers' });
+        }
+
         // Get all wallet info
         const serverWallet = await makeWallet(CHAIN, WALLET_STORAGE_URL, SERVER_PRIVATE_KEY);
         const { publicKey: certifier } = await serverWallet.getPublicKey({ identityKey: true });
-
-        const subject = req.auth?.identityKey;
-        console.log('[signCertificate] Subject from auth:', subject);
-        
-        if (!subject) {
-            console.log('[signCertificate] No subject in req.auth, this might be expected for certificate issuance');
-            // For certificate issuance, we might not have a subject yet
-            // The subject should come from the certificate request itself
-        }
 
         console.log({ subject })
 

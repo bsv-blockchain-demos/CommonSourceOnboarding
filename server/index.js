@@ -97,8 +97,17 @@ app.use((req, res, next) => {
 
 app.use(bodyParser.json())
 
-// 4. Apply the auth middleware globally (or to specific routes)
-app.use(authMiddleware)
+// 4. Apply the auth middleware to all routes EXCEPT /signCertificate
+app.use((req, res, next) => {
+  if (req.path === '/signCertificate') {
+    // Skip auth middleware for certificate signing - it's a public issuance endpoint
+    console.log('[AUTH] Bypassing auth middleware for certificate signing');
+    next();
+  } else {
+    // Apply auth middleware to all other routes
+    authMiddleware(req, res, next);
+  }
+});
 
 // Add request logging middleware
 app.use((req, _res, next) => {
