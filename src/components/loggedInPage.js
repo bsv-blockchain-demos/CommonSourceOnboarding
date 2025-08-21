@@ -3,7 +3,7 @@ import { useWalletContext } from "../context/walletContext";
 import { toast } from 'react-hot-toast';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
-import { CheckCircle, LogOut, Trash2, ArrowLeft } from "lucide-react";
+import { CheckCircle, LogOut, Trash2, ArrowLeft, RefreshCw } from "lucide-react";
 
 const LoggedInPage = () => {
     const { certificate, userPubKey, setCertificate } = useWalletContext();
@@ -24,6 +24,15 @@ const LoggedInPage = () => {
         }
     }, []);
 
+    const refreshCertificate = async () => {
+        // Clear certificate and force reload
+        setCertificate(null);
+        localStorage.clear(); // Clear any cached data
+        sessionStorage.clear();
+        // Force reload to get fresh certificate
+        window.location.reload();
+    };
+
     const handleRevoke = async () => {
         if (!certificate) return;
 
@@ -40,6 +49,7 @@ const LoggedInPage = () => {
         });
         const data = await res.json();
         if (!res.ok) {
+            console.error("Certificate revocation failed:", data);
             toast.error(data.message || "Something failed, please try again");
             return;
         }
@@ -89,6 +99,14 @@ const LoggedInPage = () => {
                             Return to Whiskey Store
                         </Button>
                     )}
+                    <Button 
+                        onClick={refreshCertificate}
+                        variant="outline"
+                        className="w-full gap-2"
+                    >
+                        <RefreshCw className="h-4 w-4" />
+                        Refresh Certificate
+                    </Button>
                     <Button 
                         onClick={handleRevoke}
                         variant="destructive"

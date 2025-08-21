@@ -111,10 +111,13 @@ export async function signCertificate(req, res) {
         // Creating certificate revocation tx
         let revocation;
         try {
+            // Create unique basket name using serialNumber to avoid conflicts with old revocation tokens
+            const revocationBasket = `certificate revocation ${subject} ${serialNumber.substring(0, 8)}`;
+            
             console.log('Creating revocation transaction with params:', {
                 description: 'Certificate revocation',
                 outputSatoshis: 1,
-                basket: `certificate revocation ${subject}`,
+                basket: revocationBasket,
                 serialNumber: serialNumber,
                 hashOfSerialNumber: hashOfSerialNumber
             });
@@ -126,7 +129,7 @@ export async function signCertificate(req, res) {
                         outputDescription: 'Certificate revocation outpoint',
                         satoshis: 1,
                         lockingScript: Script.fromASM(`OP_SHA256 ${hashOfSerialNumber} OP_EQUAL`).toHex(),
-                        basket: `certificate revocation ${subject}`,
+                        basket: revocationBasket,
                         customInstructions: JSON.stringify({
                             serialNumber, // the unlockingScript is just the serialNumber
                         })
@@ -178,9 +181,10 @@ export async function signCertificate(req, res) {
 
         // If it's a VC certificate, create and store the full VC data separately
         if (isVCCertificate) {
-            // Generate a simple DID for this certificate (in production, use proper DID generation)
-            const didSerialNumber = serialNumber.replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
-            const userDid = `did:bsv:tm did:${didSerialNumber}`;
+            // Generate a persistent DID based on user's public key for identity continuity
+            // This allows the same DID to be reused across certificate renewals/reissues
+            const userPubKeyHash = subject.replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+            const userDid = `did:bsv:${userPubKeyHash}`;
             
             // Create the full VC structure to store in MongoDB
             const fullVcData = {
@@ -204,12 +208,22 @@ export async function signCertificate(req, res) {
             documentToSave.didRef = decryptedFields.didRef;
         }
         
-        await usersCollection.updateOne({ _id: subject }, 
+        // Use the certificate subject as the ID
+        const documentId = signedCertificate.subject || subject;
+        console.log('DEBUG: signedCertificate.subject:', signedCertificate.subject);
+        console.log('DEBUG: subject:', subject);
+        console.log('DEBUG: documentId:', documentId);
+        
+        if (!documentId) {
+            throw new Error('Document ID is null or undefined - cannot save certificate');
+        }
+        
+        await usersCollection.updateOne({ _id: documentId }, 
             { $set: documentToSave },
             { upsert: true }
         );
         
-        console.log(`Certificate saved for subject: ${subject}, VC format: ${isVCCertificate}`);
+        console.log(`Certificate saved for subject: ${documentId}, VC format: ${isVCCertificate}`);
         
         // Format response for BSV SDK's acquireCertificate method
         const protocolResponse = {
