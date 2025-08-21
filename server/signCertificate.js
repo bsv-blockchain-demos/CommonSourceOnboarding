@@ -241,16 +241,29 @@ export async function signCertificate(req, res) {
         
         console.log(`Certificate would be saved for subject: ${documentId}, VC format: ${isVCCertificate} (MongoDB disabled temporarily)`);
         
-        // BSV SDK's acquireCertificate expects just the certificate object
-        // Not wrapped in any protocol response
+        // BSV SDK's acquireCertificate expects the certificate as a plain object
+        // Need to serialize the Certificate properly
         console.log('Returning signed certificate directly to BSV SDK');
         console.log('Certificate type:', signedCertificate.type);
         console.log('Certificate serialNumber:', signedCertificate.serialNumber);
         console.log('Certificate subject:', signedCertificate.subject);
         console.log('Certificate certifier:', signedCertificate.certifier);
         
+        // Convert Certificate object to plain object for JSON serialization
+        const certificateForResponse = {
+            type: signedCertificate.type,
+            serialNumber: signedCertificate.serialNumber,
+            subject: signedCertificate.subject,
+            certifier: signedCertificate.certifier,
+            revocationOutpoint: signedCertificate.revocationOutpoint,
+            signature: signedCertificate.signature,
+            fields: signedCertificate.fields
+        };
+        
+        console.log('Certificate response object:', JSON.stringify(certificateForResponse, null, 2));
+        
         res.setHeader('Content-Type', 'application/json');
-        return res.json(signedCertificate);
+        return res.json(certificateForResponse);
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
