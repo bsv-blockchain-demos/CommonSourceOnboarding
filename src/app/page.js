@@ -213,7 +213,7 @@ export default function Home() {
         },
         acquisitionProtocol: "issuance",
         certifier: serverPubKey,
-        certifierUrl: "http://localhost:8080",
+        certifierUrl: process.env.NEXT_PUBLIC_CERTIFIER_URL || "http://localhost:8080",
       });
       
       console.log('Certificate with VC data acquired:', certResponse);
