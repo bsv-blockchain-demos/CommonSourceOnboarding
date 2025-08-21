@@ -17,6 +17,7 @@ export const WalletContextProvider = ({ children }) => {
         try {
             // Use 'auto' mode to auto-detect the wallet provider
             // Don't specify localhost - let it use the default configuration
+            console.log('[WalletContext] Initializing WalletClient with auto mode (no localhost)');
             const newWallet = new WalletClient('auto');
 
             const isConnected = await newWallet.isAuthenticated();
