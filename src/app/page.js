@@ -191,7 +191,10 @@ export default function Home() {
 
       // Acquire certificate with ALL fields for compatibility
       // IMPORTANT: Including all fields for age verification in whiskey store
+      const certifierUrl = process.env.NEXT_PUBLIC_CERTIFIER_URL || "http://localhost:8080";
       console.log('Acquiring certificate with user identity fields...');
+      console.log('Certifier URL:', certifierUrl);
+      console.log('Server Public Key:', serverPubKey);
 
       const certResponse = await wallet.acquireCertificate({
         type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
@@ -209,7 +212,7 @@ export default function Home() {
         },
         acquisitionProtocol: "issuance",
         certifier: serverPubKey,
-        certifierUrl: process.env.NEXT_PUBLIC_CERTIFIER_URL || "http://localhost:8080",
+        certifierUrl: certifierUrl,
       });
       
       console.log('Certificate with VC data acquired:', certResponse);
