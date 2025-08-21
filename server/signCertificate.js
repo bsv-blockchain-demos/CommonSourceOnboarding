@@ -258,14 +258,8 @@ export async function signCertificate(req, res) {
             fields: !!certificateForResponse.fields
         });
         
-        // Ensure we return HTTP 200 explicitly
-        res.status(200);
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Headers', '*');
-        res.setHeader('Access-Control-Allow-Methods', '*');
-        
-        console.log('Sending response with status 200');
+        // Let BSV auth middleware handle the response - don't set manual headers
+        console.log('Returning certificate through BSV auth middleware');
         return res.json(certificateForResponse);
     } catch (error) {
         console.error('Certificate signing error:', error);
