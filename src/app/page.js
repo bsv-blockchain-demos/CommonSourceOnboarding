@@ -41,29 +41,25 @@ export default function Home() {
     
     setCheckingDid(true);
     try {
-      const response = await fetch('/check-existing-did', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ publicKey })
-      });
+      // Temporarily disable DID checking to avoid 500 errors
+      console.log('Skipping DID check due to server issues - proceeding with fresh DID creation');
+      // Just set the state to allow proceeding
+      setCheckingDid(false);
+      return;
       
-      const data = await response.json();
-      if (response.ok && data.hasExistingDid) {
-        setExistingDidFound(true);
-        setDidCreated(true); // Mark DID as created so user can skip to certificate generation
-        
-        // CRITICAL: Set the DID in the DID context so createIdentityVCData works
-        // We need to manually set the userDid since we're not calling createUserDid
-        if (data.did) {
-          // Update the DID context state directly 
-          // Note: This is a bit of a workaround since we're bypassing the createUserDid flow
-          console.log('Setting existing DID in context:', data.did);
-          // We'll need to call the DidContext's setUserDid function
-          // For now, let's modify the logic to not require userDid check
-        }
-        
-        toast.success('Found existing DID - you can generate a new certificate');
-      }
+      // Original code (commented out temporarily):
+      // const response = await fetch('/check-existing-did', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ publicKey })
+      // });
+      // 
+      // const data = await response.json();
+      // if (response.ok && data.hasExistingDid) {
+      //   setExistingDidFound(true);
+      //   setDidCreated(true);
+      //   toast.success('Found existing DID - you can generate a new certificate');
+      // }
     } catch (error) {
       console.error('Error checking existing DID:', error);
     } finally {
