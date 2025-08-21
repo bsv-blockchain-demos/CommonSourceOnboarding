@@ -20,8 +20,9 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
   // Additional connection options to handle Railway/Atlas SSL issues
-  ssl: true,
-  sslValidate: false, // This helps with SSL certificate validation issues
+  tls: true,
+  tlsAllowInvalidCertificates: true, // This helps with SSL certificate validation issues
+  tlsAllowInvalidHostnames: true,
   connectTimeoutMS: 30000, // 30 seconds
   socketTimeoutMS: 45000, // 45 seconds
   maxPoolSize: 10,
