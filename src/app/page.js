@@ -81,9 +81,9 @@ async function acquireCertificateCustom(wallet, args) {
     
     console.log('[Custom Cert] Created certificate instance:', cert);
     
-    // Store certificate in wallet
-    await wallet.storeCertificate(cert);
-    console.log('[Custom Cert] Stored certificate in wallet');
+    // Certificate acquisition successful - return the certificate
+    // The certificate will be handled by the wallet context for storage/validation
+    console.log('[Custom Cert] Certificate acquisition completed successfully');
     
     return cert;
     
