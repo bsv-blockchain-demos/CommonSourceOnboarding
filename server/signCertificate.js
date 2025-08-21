@@ -264,22 +264,24 @@ export async function signCertificate(req, res) {
             fields: !!certificateForResponse.fields
         });
         
-        // Return a protocol-compliant response for certificate issuance
-        // The BSV SDK might expect the certificate with the server nonce
-        const issuanceResponse = {
-            certificate: certificateForResponse,
-            serverNonce: serverNonce
-        };
-        
-        console.log('Returning certificate with issuance protocol response');
-        console.log('Response includes serverNonce:', !!serverNonce);
+        // Try returning just the certificate object directly
+        // The BSV SDK acquireCertificate might expect the raw certificate object
+        console.log('Returning certificate object directly (no wrapper)');
+        console.log('Certificate has all required fields:', {
+            type: !!certificateForResponse.type,
+            serialNumber: !!certificateForResponse.serialNumber,
+            subject: !!certificateForResponse.subject,
+            certifier: !!certificateForResponse.certifier,
+            revocationOutpoint: !!certificateForResponse.revocationOutpoint,
+            signature: !!certificateForResponse.signature
+        });
         
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Headers', '*');
         res.setHeader('Access-Control-Allow-Methods', '*');
         
-        return res.status(200).json(issuanceResponse);
+        return res.status(200).json(certificateForResponse);
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
