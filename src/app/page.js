@@ -26,19 +26,19 @@ async function acquireCertificateCustom(wallet, args) {
     const clientNonce = await createNonce(wallet, args.certifier);
     console.log('[Custom Cert] Created client nonce');
     
-    // Encrypt fields using master certificate encryption
-    const masterKeyring = await MasterCertificate.encryptFields(
+    // Create certificate fields and master keyring for encryption
+    const { certificateFields, masterKeyring } = await MasterCertificate.createCertificateFields(
       wallet,
-      args.fields,
-      args.certifier
+      args.certifier,
+      args.fields
     );
-    console.log('[Custom Cert] Encrypted fields for server');
+    console.log('[Custom Cert] Created encrypted fields and master keyring for server');
     
     // Prepare request body
     const requestBody = {
       clientNonce: clientNonce,
       type: args.type,
-      fields: masterKeyring,
+      fields: certificateFields,
       masterKeyring: masterKeyring,
       acquisitionProtocol: args.acquisitionProtocol
     };
