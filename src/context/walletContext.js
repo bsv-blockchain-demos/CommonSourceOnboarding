@@ -15,10 +15,10 @@ export const WalletContextProvider = ({ children }) => {
     // Initialize the user's wallet
     const initializeWallet = useCallback(async () => {
         try {
-            // Use 'Cicada' mode for certificate acquisition with certifierUrl support
-            // This uses WalletWireTransceiver which properly handles certifierUrl
-            console.log('[WalletContext] Initializing WalletClient with Cicada mode for certificate acquisition');
-            const newWallet = new WalletClient('Cicada');
+            // Use 'auto' mode but we'll need to handle certificate acquisition differently
+            // The auto mode will find a working wallet substrate for authentication
+            console.log('[WalletContext] Initializing WalletClient with auto mode');
+            const newWallet = new WalletClient('auto');
 
             const isConnected = await newWallet.isAuthenticated();
             if (!isConnected) {

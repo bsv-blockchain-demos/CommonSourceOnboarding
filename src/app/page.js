@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
 import { useWalletContext } from "../context/walletContext";
 import { useDidContext } from "../context/DidContext";
-import { Utils } from "@bsv/sdk";
+import { Utils, MasterCertificate, createNonce, Certificate } from "@bsv/sdk";
 import { toast } from 'react-hot-toast';
 import { useAuthContext } from "../context/authContext";
 import LoggedInPage from "../components/loggedInPage";
@@ -12,6 +12,102 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+
+// Custom certificate acquisition function that properly handles certifierUrl
+async function acquireCertificateCustom(wallet, args) {
+  try {
+    console.log('[Custom Cert] Starting certificate acquisition with args:', args);
+    
+    // Get user's identity key
+    const { publicKey: subject } = await wallet.getPublicKey({ identityKey: true });
+    console.log('[Custom Cert] User identity key:', subject);
+    
+    // Create client nonce for replay protection
+    const clientNonce = await createNonce(wallet, args.certifier);
+    console.log('[Custom Cert] Created client nonce');
+    
+    // Encrypt fields using master certificate encryption
+    const masterKeyring = await MasterCertificate.encryptFields(
+      wallet,
+      args.fields,
+      args.certifier
+    );
+    console.log('[Custom Cert] Encrypted fields for server');
+    
+    // Prepare request body
+    const requestBody = {
+      clientNonce: clientNonce,
+      type: args.type,
+      fields: masterKeyring,
+      masterKeyring: masterKeyring,
+      acquisitionProtocol: args.acquisitionProtocol
+    };
+    
+    console.log('[Custom Cert] Making authenticated request to:', args.certifierUrl + '/signCertificate');
+    
+    // Create BSV auth headers
+    const authHeaders = await createBsvAuthHeaders(wallet, subject, args.certifierUrl + '/signCertificate');
+    
+    // Make HTTP request to certificate server
+    const response = await fetch(args.certifierUrl + '/signCertificate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Certificate server responded with ${response.status}: ${response.statusText}`);
+    }
+    
+    const responseData = await response.json();
+    console.log('[Custom Cert] Received certificate response:', responseData);
+    
+    // The response should be the certificate object directly
+    const certificate = responseData;
+    
+    // Create Certificate instance and store in wallet
+    const cert = new Certificate(
+      certificate.type,
+      certificate.serialNumber,
+      certificate.subject,
+      certificate.certifier,
+      certificate.revocationOutpoint,
+      certificate.fields,
+      certificate.signature
+    );
+    
+    console.log('[Custom Cert] Created certificate instance:', cert);
+    
+    // Store certificate in wallet
+    await wallet.storeCertificate(cert);
+    console.log('[Custom Cert] Stored certificate in wallet');
+    
+    return cert;
+    
+  } catch (error) {
+    console.error('[Custom Cert] Error during certificate acquisition:', error);
+    throw new Error(`Certificate acquisition failed: ${error.message}`);
+  }
+}
+
+// Helper function to create BSV authentication headers
+async function createBsvAuthHeaders(wallet, identityKey, url) {
+  try {
+    // This is a simplified BSV auth header - in production you'd want full BSV auth middleware
+    return {
+      'x-bsv-auth-identity-key': identityKey,
+      'x-bsv-auth-url': url
+    };
+  } catch (error) {
+    console.error('Error creating BSV auth headers:', error);
+    return {
+      'x-bsv-auth-identity-key': identityKey
+    };
+  }
+}
 
 export default function Home() {
   const [username, setUsername] = useState('');
@@ -196,7 +292,9 @@ export default function Home() {
       console.log('Certifier URL:', certifierUrl);
       console.log('Server Public Key:', serverPubKey);
 
-      const certResponse = await wallet.acquireCertificate({
+      // Use custom certificate acquisition to bypass substrate issues
+      console.log('Using custom certificate acquisition with Railway server...');
+      const certResponse = await acquireCertificateCustom(wallet, {
         type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
         fields: {
           // Include all fields for backward compatibility and age verification
