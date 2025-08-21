@@ -197,7 +197,7 @@ export default function Home() {
       console.log('Server Public Key:', serverPubKey);
 
       const certResponse = await wallet.acquireCertificate({
-        type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
+        type: 'CommonSource user identity',  // Try UTF-8 string directly instead of Base64
         fields: {
           // Include all fields for backward compatibility and age verification
           username: username,
