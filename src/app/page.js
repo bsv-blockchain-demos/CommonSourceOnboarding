@@ -1,17 +1,7 @@
+// Temporary minimal version to debug 404 issues
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react";
-import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
-import { useWalletContext } from "../context/walletContext";
-import { useDidContext } from "../context/DidContext";
-import { Utils } from "@bsv/sdk";
-import { toast } from 'react-hot-toast';
-import { useAuthContext } from "../context/authContext";
-import LoggedInPage from "../components/loggedInPage";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
+import React from "react";
 
 export default function Home() {
   const [username, setUsername] = useState('');
