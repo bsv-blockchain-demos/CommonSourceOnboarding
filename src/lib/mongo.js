@@ -83,8 +83,8 @@ async function connectToMongo() {
   return { db, usersCollection, verifyCollection };
 }
 
-// Connect immediately when this module is imported
-connectToMongo().catch(console.error);
+// Don't connect immediately - let API routes handle connections
+// connectToMongo().catch(console.error);
 
 // Handle application shutdown
 process.on('SIGINT', async () => {
