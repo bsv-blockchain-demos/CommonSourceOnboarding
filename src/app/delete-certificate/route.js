@@ -199,13 +199,18 @@ export async function POST(req) {
             return NextResponse.json({ message: 'Failed to spend certificate outpoint', outpoint: output.outpoint }, { status: 400 });
         }
 
-        // Delete cert from the db
+        // Update certificate in db (remove certificate but preserve DID for reuse)
         await connectToMongo();
 
         const dbresponse = await usersCollection.updateOne({ _id: publicKey },
             {
                 $set: {
                     signedCertificate: null,
+                    revokedAt: new Date()
+                },
+                // Keep did and vcData fields for identity continuity
+                $unset: {
+                    // Remove certificate-specific data but keep persistent DID
                 }
             },
             { upsert: true }

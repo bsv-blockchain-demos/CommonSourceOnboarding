@@ -56,6 +56,11 @@ const LoggedInPage = () => {
 
         toast.success("Certificate revoked successfully");
         setCertificate(null);
+        
+        // Redirect to root page after successful revocation
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 1500); // Small delay to let user see the success message
     }
 
     const handleLogout = () => {

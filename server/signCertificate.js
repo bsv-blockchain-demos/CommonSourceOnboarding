@@ -165,10 +165,15 @@ export async function signCertificate(req, res) {
         // EX: {subject: subject, certificate: signedCertificate}
         await connectToMongo();
 
-        const existingCertificate = await usersCollection.findOne({ _id: subject });
-        if (existingCertificate) {
-            console.log('User already has a certificate, deleting it for testing:', subject);
-            await usersCollection.deleteOne({ _id: subject });
+        // Check for existing DID to enable identity continuity across certificate renewals
+        const existingRecord = await usersCollection.findOne({ _id: subject });
+        let existingDid = null;
+        
+        if (existingRecord) {
+            console.log('User has existing record, preserving DID for continuity:', subject);
+            // Preserve the existing DID for identity continuity
+            // This allows users to revoke and re-certify without creating a new identity
+            existingDid = existingRecord.did;
         }
         
         // Prepare document for database
@@ -181,16 +186,23 @@ export async function signCertificate(req, res) {
 
         // If it's a VC certificate, create and store the full VC data separately
         if (isVCCertificate) {
-            // Generate a persistent DID based on user's public key for identity continuity
+            // Reuse existing DID or generate a persistent DID based on user's public key
             // This allows the same DID to be reused across certificate renewals/reissues
-            const userPubKeyHash = subject.replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
-            const userDid = `did:bsv:${userPubKeyHash}`;
+            let userDid = existingDid;
+            if (!userDid) {
+                const userPubKeyHash = subject.replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+                userDid = `did:bsv:${userPubKeyHash}`;
+                console.log('Generated new persistent DID:', userDid);
+            } else {
+                console.log('Reusing existing DID for identity continuity:', userDid);
+            }
             
             // Create the full VC structure to store in MongoDB
+            const serverPubKeyHash = certifier.replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
             const fullVcData = {
                 '@context': ['https://www.w3.org/2018/credentials/v1'],
                 type: ['VerifiableCredential', 'IdentityCredential'],
-                issuer: `did:bsv:tm did:server`,
+                issuer: `did:bsv:${serverPubKeyHash}`,
                 issuanceDate: new Date().toISOString(),
                 credentialSubject: {
                     id: userDid,

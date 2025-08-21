@@ -26,12 +26,46 @@ export default function Home() {
   const [verificationCode, setVerificationCode] = useState('');
   const [generated, setGenerated] = useState(false);
   const [didCreated, setDidCreated] = useState(false);
+  const [existingDidFound, setExistingDidFound] = useState(false);
+  const [checkingDid, setCheckingDid] = useState(false);
 
-  const { userWallet, initializeWallet, certificate } = useWalletContext();
+  const { userWallet, initializeWallet, certificate, userPubKey } = useWalletContext();
   const { createUserDid, createIdentityVCData, userDid } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
+
+  // Check for existing DID when wallet is connected
+  const checkExistingDid = async (publicKey) => {
+    if (!publicKey || checkingDid) return;
+    
+    setCheckingDid(true);
+    try {
+      const response = await fetch('/check-existing-did', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicKey })
+      });
+      
+      const data = await response.json();
+      if (response.ok && data.hasExistingDid) {
+        setExistingDidFound(true);
+        setDidCreated(true); // Mark DID as created so user can skip to certificate generation
+        toast.success('Found existing DID - you can generate a new certificate');
+      }
+    } catch (error) {
+      console.error('Error checking existing DID:', error);
+    } finally {
+      setCheckingDid(false);
+    }
+  };
+
+  // Check for existing DID when wallet connects
+  React.useEffect(() => {
+    if (userPubKey && !certificate && !existingDidFound) {
+      checkExistingDid(userPubKey);
+    }
+  }, [userPubKey, certificate, existingDidFound]);
 
   const handleCreateDid = async () => {
     try {
