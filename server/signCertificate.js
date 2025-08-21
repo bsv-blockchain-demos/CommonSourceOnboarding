@@ -264,16 +264,22 @@ export async function signCertificate(req, res) {
             fields: !!certificateForResponse.fields
         });
         
-        // Try returning the original Certificate object instead of plain object
-        console.log('Returning original Certificate object directly (no auth middleware)');
+        // Return a protocol-compliant response for certificate issuance
+        // The BSV SDK might expect the certificate with the server nonce
+        const issuanceResponse = {
+            certificate: certificateForResponse,
+            serverNonce: serverNonce
+        };
+        
+        console.log('Returning certificate with issuance protocol response');
+        console.log('Response includes serverNonce:', !!serverNonce);
+        
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Headers', '*');
         res.setHeader('Access-Control-Allow-Methods', '*');
         
-        // Try both formats to see which works
-        console.log('CERT DEBUG - Trying original Certificate object');
-        return res.status(200).json(signedCertificate);
+        return res.status(200).json(issuanceResponse);
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
