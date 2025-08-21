@@ -49,7 +49,7 @@ console.log("SERVER PUBLIC KEY:", serverPublicKey)
 //    - Enable mutual authentication for cryptographic proof of ownership
 const authMiddleware = createAuthMiddleware({
   wallet,
-  allowUnauthenticated: false, // Enable mutual authentication for security
+  allowUnauthenticated: true, // Allow unauthenticated for certificate issuance
   logger: console,
   logLevel: 'debug',
   
