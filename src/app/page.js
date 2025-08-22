@@ -256,7 +256,7 @@ export default function Home() {
   const [checkingDid, setCheckingDid] = useState(false);
 
   const { userWallet, initializeWallet, certificate, userPubKey, setCertificate } = useWalletContext();
-  const { createUserDid, createIdentityVCData, userDid } = useDidContext();
+  const { createUserDid, createIdentityVCData, userDid, didService } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
