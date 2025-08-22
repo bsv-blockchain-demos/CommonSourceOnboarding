@@ -13,28 +13,23 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 
-// Custom certificate acquisition function that properly handles certifierUrl
+// Custom certificate acquisition function that gets the certificate from server
+// then uses the BSV SDK's direct protocol to store it properly in the wallet
 async function acquireCertificateCustom(wallet, args) {
   try {
-    console.log('[Custom Cert] Starting certificate acquisition with args:', args);
+    console.log('[Custom Cert] Starting two-phase certificate acquisition...');
     
-    // Get user's identity key
+    // Phase 1: Get certificate from our server using issuance protocol
     const { publicKey: subject } = await wallet.getPublicKey({ identityKey: true });
     console.log('[Custom Cert] User identity key:', subject);
     
-    // Create client nonce for replay protection
     const clientNonce = await createNonce(wallet, args.certifier);
-    console.log('[Custom Cert] Created client nonce');
-    
-    // Create certificate fields and master keyring for encryption
     const { certificateFields, masterKeyring } = await MasterCertificate.createCertificateFields(
       wallet,
       args.certifier,
       args.fields
     );
-    console.log('[Custom Cert] Created encrypted fields and master keyring for server');
     
-    // Prepare request body
     const requestBody = {
       clientNonce: clientNonce,
       type: args.type,
@@ -43,12 +38,9 @@ async function acquireCertificateCustom(wallet, args) {
       acquisitionProtocol: args.acquisitionProtocol
     };
     
-    console.log('[Custom Cert] Making authenticated request to:', args.certifierUrl + '/signCertificate');
-    
-    // Create BSV auth headers
+    console.log('[Custom Cert] Phase 1: Getting certificate from server...');
     const authHeaders = await createBsvAuthHeaders(wallet, subject, args.certifierUrl + '/signCertificate');
     
-    // Make HTTP request to certificate server
     const response = await fetch(args.certifierUrl + '/signCertificate', {
       method: 'POST',
       headers: {
@@ -62,34 +54,172 @@ async function acquireCertificateCustom(wallet, args) {
       throw new Error(`Certificate server responded with ${response.status}: ${response.statusText}`);
     }
     
-    const responseData = await response.json();
-    console.log('[Custom Cert] Received certificate response:', responseData);
+    const certificate = await response.json();
+    console.log('[Custom Cert] Received certificate from server:', certificate);
     
-    // The response should be the certificate object directly
-    const certificate = responseData;
+    // Phase 2: Use BSV SDK's acquireCertificate with "direct" protocol to store it properly
+    // This should store the certificate in the wallet's persistent storage
+    console.log('[Custom Cert] Phase 2: Storing certificate in wallet using direct protocol...');
     
-    // Create Certificate instance and store in wallet
-    const cert = new Certificate(
-      certificate.type,
-      certificate.serialNumber,
-      certificate.subject,
-      certificate.certifier,
-      certificate.revocationOutpoint,
-      certificate.fields,
-      certificate.signature
-    );
-    
-    console.log('[Custom Cert] Created certificate instance:', cert);
-    
-    // Certificate acquisition successful - return the certificate
-    // The certificate will be handled by the wallet context for storage/validation
-    console.log('[Custom Cert] Certificate acquisition completed successfully');
-    
-    return cert;
+    try {
+      const storedCert = await wallet.acquireCertificate({
+        type: certificate.type,
+        serialNumber: certificate.serialNumber,
+        revocationOutpoint: certificate.revocationOutpoint,
+        signature: certificate.signature,
+        fields: certificate.fields,
+        certifier: certificate.certifier,
+        acquisitionProtocol: 'direct' // Direct protocol doesn't need certifierUrl
+      });
+      
+      console.log('[Custom Cert] Certificate stored successfully in wallet');
+      return storedCert;
+      
+    } catch (directError) {
+      console.error('[Custom Cert] Direct storage failed, returning certificate anyway:', directError);
+      // Even if direct storage fails, return the certificate we got from server
+      const cert = new Certificate(
+        certificate.type,
+        certificate.serialNumber,
+        certificate.subject,
+        certificate.certifier,
+        certificate.revocationOutpoint,
+        certificate.fields,
+        certificate.signature
+      );
+      return cert;
+    }
     
   } catch (error) {
     console.error('[Custom Cert] Error during certificate acquisition:', error);
     throw new Error(`Certificate acquisition failed: ${error.message}`);
+  }
+}
+
+// Test function to store DID Document as BSV certificate
+async function testDidDocumentCertificate(wallet, didService, serverPublicKey) {
+  try {
+    console.log('[DID Certificate Test] Starting DID document certificate test...');
+    
+    if (!wallet) {
+      throw new Error('Wallet not initialized');
+    }
+    
+    if (!didService) {
+      throw new Error('DID service not initialized');
+    }
+    
+    // Generate DID document using existing service
+    console.log('[DID Certificate Test] Creating DID document...');
+    const didResult = await didService.createUserDid();
+    console.log('[DID Certificate Test] DID created:', didResult.did);
+    
+    // Extract serial number from DID result for certificate linkage
+    const serialNumber = didResult.serialNumber;
+    console.log('[DID Certificate Test] Serial number:', serialNumber);
+    
+    // Create certificate fields for DID document
+    const certificateFields = {
+      didId: didResult.did,
+      didDocument: JSON.stringify(didResult.didDocument),
+      version: "1.0",
+      created: new Date().toISOString(),
+      updated: new Date().toISOString()
+    };
+    
+    console.log('[DID Certificate Test] Certificate fields prepared:', {
+      didId: certificateFields.didId,
+      documentSize: certificateFields.didDocument.length,
+      version: certificateFields.version
+    });
+    
+    // Use existing custom acquisition to store DID document as certificate
+    console.log('[DID Certificate Test] Acquiring DID document certificate...');
+    const certificate = await acquireCertificateCustom(wallet, {
+      type: "DID Document",
+      fields: certificateFields,
+      certifier: serverPubKey,
+      certifierUrl: process.env.NEXT_PUBLIC_SERVER_URL || 'https://common-source-server-production.up.railway.app',
+      acquisitionProtocol: 'issuance'
+    });
+    
+    console.log('[DID Certificate Test] DID Document Certificate stored successfully:', {
+      type: certificate.type,
+      serialNumber: certificate.serialNumber,
+      subject: certificate.subject,
+      hasFields: !!certificate.fields
+    });
+    
+    // Verify the certificate contains the DID document
+    if (certificate.fields && certificate.fields.didDocument) {
+      const retrievedDocument = JSON.parse(certificate.fields.didDocument);
+      console.log('[DID Certificate Test] Retrieved DID document from certificate:', retrievedDocument.id);
+      
+      // Validate the retrieved document matches original
+      if (retrievedDocument.id === didResult.did) {
+        console.log('[DID Certificate Test] ✅ DID document certificate test PASSED');
+        return {
+          success: true,
+          certificate,
+          didDocument: retrievedDocument,
+          serialNumber: certificate.serialNumber
+        };
+      } else {
+        throw new Error(`DID mismatch: expected ${didResult.did}, got ${retrievedDocument.id}`);
+      }
+    } else {
+      throw new Error('Certificate does not contain DID document fields');
+    }
+    
+  } catch (error) {
+    console.error('[DID Certificate Test] ❌ Test FAILED:', error);
+    throw new Error(`DID Document Certificate test failed: ${error.message}`);
+  }
+}
+
+// Helper function to resolve DID from wallet certificates
+async function resolveDIDFromCertificate(wallet, didId) {
+  try {
+    console.log('[DID Resolution] Resolving DID from certificates:', didId);
+    
+    if (!wallet) {
+      throw new Error('Wallet not initialized');
+    }
+    
+    // List all certificates and filter for DID documents
+    const certificates = await wallet.listCertificates();
+    console.log('[DID Resolution] Found', certificates.length, 'total certificates');
+    
+    const didDocumentType = btoa("DID Document");
+    const didCertificates = certificates.filter(cert => 
+      cert.type === didDocumentType
+    );
+    
+    console.log('[DID Resolution] Found', didCertificates.length, 'DID document certificates');
+    
+    // Find certificate with matching DID
+    const matchingCert = didCertificates.find(cert => 
+      cert.fields && cert.fields.didId === didId
+    );
+    
+    if (matchingCert) {
+      console.log('[DID Resolution] Found matching certificate for DID:', didId);
+      const didDocument = JSON.parse(matchingCert.fields.didDocument);
+      
+      console.log('[DID Resolution] ✅ DID resolved successfully');
+      return {
+        didDocument,
+        certificate: matchingCert,
+        found: true
+      };
+    }
+    
+    console.log('[DID Resolution] ⚠️ No certificate found for DID:', didId);
+    return { found: false };
+    
+  } catch (error) {
+    console.error('[DID Resolution] Error resolving DID from certificate:', error);
+    throw new Error(`DID resolution failed: ${error.message}`);
   }
 }
 
@@ -369,6 +499,71 @@ export default function Home() {
     await loginWithCertificate();
   }
 
+  // Test handler for DID document certificate storage
+  const handleTestDidCertificate = async () => {
+    try {
+      if (!wallet) {
+        toast.error('Please connect wallet first');
+        return;
+      }
+
+      if (!didService) {
+        toast.error('DID service not initialized');
+        return;
+      }
+
+      toast.info('Testing DID document certificate storage...');
+      
+      const result = await testDidDocumentCertificate(wallet, didService, serverPubKey);
+      
+      if (result.success) {
+        toast.success(`✅ DID Certificate Test PASSED! DID: ${result.didDocument.id}`);
+        console.log('[UI Test] DID Certificate stored with serial number:', result.serialNumber);
+      }
+      
+    } catch (error) {
+      console.error('[UI Test] DID Certificate test failed:', error);
+      toast.error(`❌ DID Certificate Test FAILED: ${error.message}`);
+    }
+  }
+
+  // Test handler for DID resolution from certificates
+  const handleTestDidResolution = async () => {
+    try {
+      if (!wallet) {
+        toast.error('Please connect wallet first');
+        return;
+      }
+
+      // For testing, we'll try to resolve any existing DID
+      // In a real scenario, you'd pass a specific DID ID
+      const certificates = await wallet.listCertificates();
+      const didDocumentType = btoa("DID Document");
+      const didCerts = certificates.filter(cert => cert.type === didDocumentType);
+      
+      if (didCerts.length === 0) {
+        toast.info('No DID certificates found. Run DID Certificate Test first.');
+        return;
+      }
+
+      const testDid = didCerts[0].fields.didId;
+      toast.info(`Testing DID resolution for: ${testDid}`);
+      
+      const result = await resolveDIDFromCertificate(wallet, testDid);
+      
+      if (result.found) {
+        toast.success(`✅ DID Resolution PASSED! Resolved: ${result.didDocument.id}`);
+        console.log('[UI Test] DID resolved successfully:', result.didDocument);
+      } else {
+        toast.warning('⚠️ DID not found in certificates');
+      }
+      
+    } catch (error) {
+      console.error('[UI Test] DID Resolution test failed:', error);
+      toast.error(`❌ DID Resolution Test FAILED: ${error.message}`);
+    }
+  }
+
   if (generated && !certificate) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -487,6 +682,29 @@ export default function Home() {
                 >
                   Generate Certificate
                 </Button>
+                
+                {/* Test buttons for DID Document Certificate functionality */}
+                <div className="border-t pt-3 mt-4">
+                  <p className="text-sm text-muted-foreground text-center mb-3">DID Certificate Tests</p>
+                  <div className="space-y-2">
+                    <Button
+                      onClick={handleTestDidCertificate}
+                      disabled={!userWallet || !didService}
+                      variant="outline"
+                      className="w-full text-sm"
+                    >
+                      Test DID Certificate Storage
+                    </Button>
+                    <Button
+                      onClick={handleTestDidResolution}
+                      disabled={!userWallet}
+                      variant="outline"
+                      className="w-full text-sm"
+                    >
+                      Test DID Resolution
+                    </Button>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

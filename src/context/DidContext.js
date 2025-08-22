@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, createContext, useState, useCallback } from "react";
+import { useContext, createContext, useState, useCallback, useEffect } from "react";
 import { useWalletContext } from "./walletContext";
 import { BsvDidService } from "../lib/bsv/BsvDidService";
 import { BsvVcService } from "../lib/bsv/BsvVcService";
@@ -13,6 +13,21 @@ export const DidContextProvider = ({ children }) => {
   const [didDocument, setDidDocument] = useState(null);
   const [bsvDidService, setBsvDidService] = useState(null);
   const [bsvVcService, setBsvVcService] = useState(null);
+  
+  // Load existing DID from storage when user key is available
+  useEffect(() => {
+    if (userPubKey && !userDid) {
+      const storedDidKey = `user_did_${userPubKey}`;
+      const storedDid = localStorage.getItem(storedDidKey);
+      
+      if (storedDid) {
+        const didData = JSON.parse(storedDid);
+        console.log('[DidContext] Loaded existing DID from storage:', didData.did);
+        setUserDid(didData.did);
+        setDidDocument(didData.didDocument);
+      }
+    }
+  }, [userPubKey, userDid]);
 
   // Initialize BSV services when wallet is available
   const initializeBsvServices = useCallback(() => {
@@ -32,6 +47,18 @@ export const DidContextProvider = ({ children }) => {
     try {
       console.log('[DidContext] Creating user DID...');
       
+      // Check if we already have a DID stored for this user
+      const storedDidKey = `user_did_${userPubKey}`;
+      const storedDid = localStorage.getItem(storedDidKey);
+      
+      if (storedDid) {
+        const didData = JSON.parse(storedDid);
+        console.log('[DidContext] Found existing DID in storage:', didData.did);
+        setUserDid(didData.did);
+        setDidDocument(didData.didDocument);
+        return didData;
+      }
+      
       const { didService } = initializeBsvServices();
       if (!didService) {
         throw new Error('BSV DID service not initialized');
@@ -42,7 +69,10 @@ export const DidContextProvider = ({ children }) => {
       setUserDid(result.did);
       setDidDocument(result.didDocument);
       
-      console.log(`[DidContext] User DID created: ${result.did}`);
+      // Persist DID to localStorage
+      localStorage.setItem(storedDidKey, JSON.stringify(result));
+      
+      console.log(`[DidContext] User DID created and stored: ${result.did}`);
       return result;
 
     } catch (error) {
