@@ -256,7 +256,7 @@ export default function Home() {
   const [checkingDid, setCheckingDid] = useState(false);
 
   const { userWallet, initializeWallet, certificate, userPubKey, setCertificate } = useWalletContext();
-  const { createUserDid, createIdentityVCData, userDid, didService } = useDidContext();
+  const { createUserDid, createIdentityVCData, userDid, didService, loadExistingDID, checkWalletForDIDCertificates } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
@@ -267,27 +267,71 @@ export default function Home() {
     
     setCheckingDid(true);
     try {
-      console.log('Checking for existing certificate for user:', publicKey);
+      console.log('[Page] Checking for existing certificates and DIDs for user:', publicKey);
       
-      // Check if user already has a certificate - this is more direct than DID checking
+      // Check if user already has a certificate loaded in context
       if (certificate) {
-        console.log('User already has certificate loaded');
+        console.log('[Page] User already has certificate loaded in context');
         setExistingDidFound(true);
         setDidCreated(true);
         setCheckingDid(false);
         return;
       }
       
-      // If no certificate is loaded yet, allow proceeding with fresh DID creation
-      console.log('No existing certificate found - proceeding with fresh DID creation');
-      setCheckingDid(false);
+      // Check if DID is already loaded in DidContext
+      if (userDid) {
+        console.log('[Page] User already has DID loaded in context:', userDid);
+        setExistingDidFound(true);
+        setDidCreated(true);
+        setCheckingDid(false);
+        return;
+      }
+      
+      // Check wallet for DID certificates using DidContext function
+      if (userWallet && checkWalletForDIDCertificates) {
+        console.log('[Page] Checking wallet for DID certificates...');
+        const didCertResult = await checkWalletForDIDCertificates();
+        
+        if (didCertResult) {
+          console.log('[Page] ✅ Found existing DID certificate:', didCertResult.did);
+          setExistingDidFound(true);
+          setDidCreated(true);
+          setCheckingDid(false);
+          return;
+        }
+      }
+      
+      // Check wallet for identity certificates
+      if (userWallet) {
+        try {
+          console.log('[Page] Checking wallet for identity certificates...');
+          const certificates = await userWallet.listCertificates();
+          const identityType = btoa("CommonSource user identity");
+          const identityCerts = certificates.filter(cert => cert.type === identityType);
+          
+          if (identityCerts.length > 0) {
+            console.log('[Page] ✅ Found existing identity certificates:', identityCerts.length);
+            setExistingDidFound(true);
+            setDidCreated(true);
+            setCheckingDid(false);
+            return;
+          }
+        } catch (certError) {
+          console.error('[Page] Error checking identity certificates:', certError);
+        }
+      }
+      
+      // No existing certificates or DIDs found
+      console.log('[Page] No existing certificates or DIDs found - user can create new ones');
+      setExistingDidFound(false);
+      setDidCreated(false);
       
     } catch (error) {
-      console.error('Error checking existing certificate:', error);
+      console.error('[Page] Error checking existing certificates:', error);
     } finally {
       setCheckingDid(false);
     }
-  }, [checkingDid, certificate]);
+  }, [checkingDid, certificate, userDid, userWallet, checkWalletForDIDCertificates]);
 
   // Check for existing certificate when wallet connects
   useEffect(() => {
