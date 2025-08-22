@@ -140,7 +140,7 @@ export class BsvDidService {
 
   /**
    * Resolve a DID to its DID document
-   * Enhanced implementation with database lookup and basic validation
+   * Certificate-based implementation - no MongoDB dependency
    */
   async resolveDID(did) {
     try {
@@ -159,18 +159,11 @@ export class BsvDidService {
         throw new Error(`Unsupported DID topic: ${topic}`);
       }
 
-      // Attempt to resolve from local database first
-      const dbResult = await this.resolveDIDFromDatabase(did);
-      if (dbResult) {
-        console.log(`[BsvDidService] DID resolved from database: ${did}`);
-        return dbResult;
-      }
-
-      // TODO: Implement overlay network lookup for DIDs stored on BSV blockchain
-      // This would query the overlay service for transactions containing DID documents
-      console.log(`[BsvDidService] DID not found in database, overlay lookup not yet implemented: ${did}`);
+      // Resolution is now handled by wallet certificates in DidContext
+      // This method returns null to indicate resolution should be done at the context level
+      console.log(`[BsvDidService] DID resolution now handled by wallet certificates`);
       
-      // Return null if not found (rather than throwing error to allow graceful handling)
+      // Return null to indicate DID should be resolved from wallet certificates
       return null;
 
     } catch (error) {
@@ -180,32 +173,13 @@ export class BsvDidService {
   }
 
   /**
-   * Resolve DID from local database
-   * Looks up DID documents stored during certificate creation
+   * Resolve DID from wallet certificates (deprecated - moved to DidContext)
+   * This method is kept for backward compatibility but now just returns null
+   * DID resolution should be done through DidContext.checkWalletForDIDCertificates()
    */
   async resolveDIDFromDatabase(did) {
-    try {
-      // This would integrate with your existing MongoDB connection
-      // For now, we'll use a fetch to the existing API structure
-      const response = await fetch('/api/resolve-did', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ did: did }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data.didDocument || null;
-      }
-
-      return null;
-
-    } catch (error) {
-      console.error('[BsvDidService] Database DID lookup failed:', error);
-      return null;
-    }
+    console.log('[BsvDidService] resolveDIDFromDatabase is deprecated - use DidContext for certificate-based resolution');
+    return null;
   }
 
   /**

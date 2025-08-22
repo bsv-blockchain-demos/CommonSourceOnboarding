@@ -13,16 +13,6 @@ export const DidContextProvider = ({ children }) => {
   const [didDocument, setDidDocument] = useState(null);
   const [bsvDidService, setBsvDidService] = useState(null);
   const [bsvVcService, setBsvVcService] = useState(null);
-  
-  // Auto-load existing DID when wallet connects (unified approach)
-  useEffect(() => {
-    if (userWallet && userPubKey && !userDid) {
-      console.log('[DidContext] Wallet connected, auto-loading existing DID...');
-      loadExistingDID().catch(error => {
-        console.error('[DidContext] Error auto-loading existing DID:', error);
-      });
-    }
-  }, [userWallet, userPubKey, userDid, loadExistingDID]);
 
   // Check wallet for existing DID certificates
   const checkWalletForDIDCertificates = useCallback(async () => {
@@ -349,6 +339,17 @@ export const DidContextProvider = ({ children }) => {
       return false;
     }
   }, [initializeBsvServices]);
+
+  // Auto-load existing DID when wallet connects (unified approach)
+  // This useEffect must be defined AFTER all the useCallbacks it depends on
+  useEffect(() => {
+    if (userWallet && userPubKey && !userDid) {
+      console.log('[DidContext] Wallet connected, auto-loading existing DID...');
+      loadExistingDID().catch(error => {
+        console.error('[DidContext] Error auto-loading existing DID:', error);
+      });
+    }
+  }, [userWallet, userPubKey, userDid, loadExistingDID]);
 
   return (
     <DidContext.Provider value={{
