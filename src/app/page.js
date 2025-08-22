@@ -125,51 +125,47 @@ export default function Home() {
   const [existingDidFound, setExistingDidFound] = useState(false);
   const [checkingDid, setCheckingDid] = useState(false);
 
-  const { userWallet, initializeWallet, certificate, userPubKey } = useWalletContext();
+  const { userWallet, initializeWallet, certificate, userPubKey, setCertificate } = useWalletContext();
   const { createUserDid, createIdentityVCData, userDid } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
 
   // Check for existing DID when wallet is connected
-  const checkExistingDid = useCallback(async (publicKey) => {
+  const checkExistingCertificate = useCallback(async (publicKey) => {
     if (!publicKey || checkingDid) return;
     
     setCheckingDid(true);
     try {
-      // Temporarily disable DID checking to avoid 500 errors
-      console.log('Skipping DID check due to server issues - proceeding with fresh DID creation');
-      // Just set the state to allow proceeding
-      setCheckingDid(false);
-      return;
+      console.log('Checking for existing certificate for user:', publicKey);
       
-      // Original code (commented out temporarily):
-      // const response = await fetch('/check-existing-did', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ publicKey })
-      // });
-      // 
-      // const data = await response.json();
-      // if (response.ok && data.hasExistingDid) {
-      //   setExistingDidFound(true);
-      //   setDidCreated(true);
-      //   toast.success('Found existing DID - you can generate a new certificate');
-      // }
+      // Check if user already has a certificate - this is more direct than DID checking
+      if (certificate) {
+        console.log('User already has certificate loaded');
+        setExistingDidFound(true);
+        setDidCreated(true);
+        setCheckingDid(false);
+        return;
+      }
+      
+      // If no certificate is loaded yet, allow proceeding with fresh DID creation
+      console.log('No existing certificate found - proceeding with fresh DID creation');
+      setCheckingDid(false);
+      
     } catch (error) {
-      console.error('Error checking existing DID:', error);
+      console.error('Error checking existing certificate:', error);
     } finally {
       setCheckingDid(false);
     }
-  }, [checkingDid]);
+  }, [checkingDid, certificate]);
 
-  // Check for existing DID when wallet connects
+  // Check for existing certificate when wallet connects
   useEffect(() => {
     if (userPubKey && !certificate && !existingDidFound && !checkingDid) {
-      console.log('Checking for existing DID for user:', userPubKey);
-      checkExistingDid(userPubKey);
+      console.log('Checking for existing certificate for user:', userPubKey);
+      checkExistingCertificate(userPubKey);
     }
-  }, [userPubKey, certificate, existingDidFound, checkingDid, checkExistingDid]);
+  }, [userPubKey, certificate, existingDidFound, checkingDid, checkExistingCertificate]);
 
   const handleCreateDid = async () => {
     try {
@@ -314,6 +310,13 @@ export default function Home() {
       });
       
       console.log('Certificate with VC data acquired:', certResponse);
+      
+      // Trigger authentication check to detect the new certificate
+      console.log('Triggering authentication check to detect new certificate...');
+      
+      // Set certificate directly in wallet context to trigger state update
+      setCertificate(certResponse);
+      
       toast.success('Identity certificate generated successfully');
       setGenerated(true);
 
