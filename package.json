@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@bsv/sdk": "^1.6.18",
+    "@bsv/sdk": "^1.6.24",
     "@bsv/wallet-toolbox-client": "^1.5.20",
     "@getbrevo/brevo": "^3.0.1",
     "@radix-ui/react-avatar": "^1.1.10",
