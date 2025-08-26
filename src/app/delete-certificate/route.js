@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectToMongo, usersCollection } from "../../lib/mongo";
-import { KeyDeriver, PrivateKey, Utils, WalletClient, Hash } from "@bsv/sdk";
+import { KeyDeriver, PrivateKey, Utils, Hash } from "@bsv/sdk";
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
 
 const CHAIN = process.env.CHAIN;
@@ -221,11 +221,12 @@ export async function POST(req) {
         }
 
         // Call relinquish certificate
-        const userWallet = new WalletClient('auto');
+        const { walletService } = await import('../../lib/WalletService');
+        const userWallet = await walletService.getWallet();
         const relinquishResponse = await userWallet.relinquishCertificate({
             type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
             serialNumber: certificate.serialNumber,
-            certifier: serverPubKey,
+            certifier: process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4",
         });
         console.log("relinquishResponse", relinquishResponse);
 

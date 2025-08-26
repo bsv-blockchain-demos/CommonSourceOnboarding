@@ -1,181 +1,21 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
-import { useWalletContext } from "../context/walletContext";
+import { Utils } from "@bsv/sdk";
 import { useDidContext } from "../context/DidContext";
-import { Utils, MasterCertificate, createNonce, Certificate } from "@bsv/sdk";
 import { toast } from 'react-hot-toast';
 import { useAuthContext } from "../context/authContext";
+import { useWallet } from "../components/WalletWrapper";
 import LoggedInPage from "../components/loggedInPage";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 
-// Custom certificate acquisition function that gets the certificate from server
-// then uses the BSV SDK's direct protocol to store it properly in the wallet
-async function acquireCertificateCustom(wallet, args) {
-  try {
-    console.log('[Custom Cert] Starting two-phase certificate acquisition...');
-    
-    // Phase 1: Get certificate from our server using issuance protocol
-    const { publicKey: subject } = await wallet.getPublicKey({ identityKey: true });
-    console.log('[Custom Cert] User identity key:', subject);
-    
-    const clientNonce = await createNonce(wallet, args.certifier);
-    const { certificateFields, masterKeyring } = await MasterCertificate.createCertificateFields(
-      wallet,
-      args.certifier,
-      args.fields
-    );
-    
-    const requestBody = {
-      clientNonce: clientNonce,
-      type: args.type,
-      fields: certificateFields,
-      masterKeyring: masterKeyring,
-      acquisitionProtocol: args.acquisitionProtocol
-    };
-    
-    console.log('[Custom Cert] Phase 1: Getting certificate from server...');
-    const authHeaders = await createBsvAuthHeaders(wallet, subject, args.certifierUrl + '/signCertificate');
-    
-    const response = await fetch(args.certifierUrl + '/signCertificate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders
-      },
-      body: JSON.stringify(requestBody)
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Certificate server responded with ${response.status}: ${response.statusText}`);
-    }
-    
-    const certificate = await response.json();
-    console.log('[Custom Cert] Received certificate from server:', certificate);
-    
-    // Phase 2: Use BSV SDK's acquireCertificate with "direct" protocol to store it properly
-    // This should store the certificate in the wallet's persistent storage
-    console.log('[Custom Cert] Phase 2: Storing certificate in wallet using direct protocol...');
-    
-    try {
-      const storedCert = await wallet.acquireCertificate({
-        type: certificate.type,
-        serialNumber: certificate.serialNumber,
-        revocationOutpoint: certificate.revocationOutpoint,
-        signature: certificate.signature,
-        fields: certificate.fields,
-        certifier: certificate.certifier,
-        acquisitionProtocol: 'direct' // Direct protocol doesn't need certifierUrl
-      });
-      
-      console.log('[Custom Cert] Certificate stored successfully in wallet');
-      return storedCert;
-      
-    } catch (directError) {
-      console.error('[Custom Cert] Direct storage failed, returning certificate anyway:', directError);
-      // Even if direct storage fails, return the certificate we got from server
-      const cert = new Certificate(
-        certificate.type,
-        certificate.serialNumber,
-        certificate.subject,
-        certificate.certifier,
-        certificate.revocationOutpoint,
-        certificate.fields,
-        certificate.signature
-      );
-      return cert;
-    }
-    
-  } catch (error) {
-    console.error('[Custom Cert] Error during certificate acquisition:', error);
-    throw new Error(`Certificate acquisition failed: ${error.message}`);
-  }
-}
+// Use the EXACT working pattern from pre-Vercel commit a337e5a
+// This was the last known working certificate acquisition approach
 
-// Test function to store DID Document as BSV certificate
-async function testDidDocumentCertificate(wallet, didService, serverPublicKey) {
-  try {
-    console.log('[DID Certificate Test] Starting DID document certificate test...');
-    
-    if (!wallet) {
-      throw new Error('Wallet not initialized');
-    }
-    
-    if (!didService) {
-      throw new Error('DID service not initialized');
-    }
-    
-    // Generate DID document using existing service
-    console.log('[DID Certificate Test] Creating DID document...');
-    const didResult = await didService.createUserDid();
-    console.log('[DID Certificate Test] DID created:', didResult.did);
-    
-    // Extract serial number from DID result for certificate linkage
-    const serialNumber = didResult.serialNumber;
-    console.log('[DID Certificate Test] Serial number:', serialNumber);
-    
-    // Create certificate fields for DID document
-    const certificateFields = {
-      didId: didResult.did,
-      didDocument: JSON.stringify(didResult.didDocument),
-      version: "1.0",
-      created: new Date().toISOString(),
-      updated: new Date().toISOString()
-    };
-    
-    console.log('[DID Certificate Test] Certificate fields prepared:', {
-      didId: certificateFields.didId,
-      documentSize: certificateFields.didDocument.length,
-      version: certificateFields.version
-    });
-    
-    // Use existing custom acquisition to store DID document as certificate
-    console.log('[DID Certificate Test] Acquiring DID document certificate...');
-    const certificate = await acquireCertificateCustom(wallet, {
-      type: "DID Document",
-      fields: certificateFields,
-      certifier: serverPubKey,
-      certifierUrl: process.env.NEXT_PUBLIC_SERVER_URL || 'https://common-source-server-production.up.railway.app',
-      acquisitionProtocol: 'issuance'
-    });
-    
-    console.log('[DID Certificate Test] DID Document Certificate stored successfully:', {
-      type: certificate.type,
-      serialNumber: certificate.serialNumber,
-      subject: certificate.subject,
-      hasFields: !!certificate.fields
-    });
-    
-    // Verify the certificate contains the DID document
-    if (certificate.fields && certificate.fields.didDocument) {
-      const retrievedDocument = JSON.parse(certificate.fields.didDocument);
-      console.log('[DID Certificate Test] Retrieved DID document from certificate:', retrievedDocument.id);
-      
-      // Validate the retrieved document matches original
-      if (retrievedDocument.id === didResult.did) {
-        console.log('[DID Certificate Test] ✅ DID document certificate test PASSED');
-        return {
-          success: true,
-          certificate,
-          didDocument: retrievedDocument,
-          serialNumber: certificate.serialNumber
-        };
-      } else {
-        throw new Error(`DID mismatch: expected ${didResult.did}, got ${retrievedDocument.id}`);
-      }
-    } else {
-      throw new Error('Certificate does not contain DID document fields');
-    }
-    
-  } catch (error) {
-    console.error('[DID Certificate Test] ❌ Test FAILED:', error);
-    throw new Error(`DID Document Certificate test failed: ${error.message}`);
-  }
-}
 
 // Helper function to resolve DID from wallet certificates
 async function resolveDIDFromCertificate(wallet, didId) {
@@ -190,12 +30,15 @@ async function resolveDIDFromCertificate(wallet, didId) {
     const certificates = await wallet.listCertificates();
     console.log('[DID Resolution] Found', certificates.length, 'total certificates');
     
-    const didDocumentType = btoa("DID Document");
+    // Filter for CommonSource identity certificates that contain DID data (isDID field)
+    const commonSourceType = btoa("CommonSource user identity");
     const didCertificates = certificates.filter(cert => 
-      cert.type === didDocumentType
+      cert.type === commonSourceType && 
+      cert.fields && 
+      cert.fields.isDID === 'true'
     );
     
-    console.log('[DID Resolution] Found', didCertificates.length, 'DID document certificates');
+    console.log('[DID Resolution] Found', didCertificates.length, 'DID certificates (CommonSource identity type with isDID=true)');
     
     // Find certificate with matching DID
     const matchingCert = didCertificates.find(cert => 
@@ -223,23 +66,18 @@ async function resolveDIDFromCertificate(wallet, didId) {
   }
 }
 
-// Helper function to create BSV authentication headers
-async function createBsvAuthHeaders(wallet, identityKey, url) {
-  try {
-    // This is a simplified BSV auth header - in production you'd want full BSV auth middleware
-    return {
-      'x-bsv-auth-identity-key': identityKey,
-      'x-bsv-auth-url': url
-    };
-  } catch (error) {
-    console.error('Error creating BSV auth headers:', error);
-    return {
-      'x-bsv-auth-identity-key': identityKey
-    };
-  }
-}
 
 export default function Home() {
+  
+  // Get wallet context
+  const { userWallet, userPubKey, certificate, setCertificate, initializeWallet } = useWallet();
+  
+  // Debug: Log wallet context to see what we're receiving
+  console.log('[Page] Wallet context received:', {
+    userWallet: !!userWallet,
+    userPubKey: !!userPubKey,
+    certificate: !!certificate
+  });
   const [username, setUsername] = useState('');
   const [residence, setResidence] = useState('');
   const [age, setAge] = useState('');
@@ -255,15 +93,43 @@ export default function Home() {
   const [existingDidFound, setExistingDidFound] = useState(false);
   const [checkingDid, setCheckingDid] = useState(false);
 
-  const { userWallet, initializeWallet, certificate, userPubKey, setCertificate } = useWalletContext();
-  const { createUserDid, createIdentityVCData, userDid, didService, loadExistingDID, checkWalletForDIDCertificates } = useDidContext();
+  const { createUserDid, createIdentityVCData, userDid, didService, checkWalletForDIDCertificates, resetInitializationFlag, debugStorageState } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
+  
+  // Page-level initialization tracking to prevent infinite loops
+  const hasCheckedExisting = useRef(false);
+  const walletCheckAttempts = useRef(new Map()); // Track attempts by pubkey
+  const walletErrorCount = useRef(0);
+  const maxWalletErrors = 5; // Increased from 3 to 5 for legitimate operations
 
-  // Check for existing DID when wallet is connected
+  // Check for existing DID when wallet is connected (with circuit breaker)
   const checkExistingCertificate = useCallback(async (publicKey) => {
     if (!publicKey || checkingDid) return;
+    
+    // Check if we've already attempted check for this pubkey
+    const attemptKey = publicKey;
+    const previousAttempts = walletCheckAttempts.current.get(attemptKey) || 0;
+    const maxAttempts = 3;
+    
+    if (previousAttempts >= maxAttempts) {
+      console.log(`[Page] ⚠️ Skipping wallet check - already attempted ${previousAttempts} times for ${attemptKey}`);
+      setExistingDidFound(false);
+      setDidCreated(false);
+      return;
+    }
+    
+    // Circuit breaker: skip if we've had too many wallet errors
+    if (walletErrorCount.current >= maxWalletErrors) {
+      console.log('[Page] ⚠️ Skipping wallet check - too many previous errors');
+      setExistingDidFound(false);
+      setDidCreated(false);
+      return;
+    }
+    
+    console.log(`[Page] Checking for existing certificates (attempt ${previousAttempts + 1}/${maxAttempts})...`);
+    walletCheckAttempts.current.set(attemptKey, previousAttempts + 1);
     
     setCheckingDid(true);
     try {
@@ -274,7 +140,9 @@ export default function Home() {
         console.log('[Page] User already has certificate loaded in context');
         setExistingDidFound(true);
         setDidCreated(true);
-        setCheckingDid(false);
+        // Reset error counts on success
+        walletErrorCount.current = 0;
+        walletCheckAttempts.current.delete(attemptKey);
         return;
       }
       
@@ -283,21 +151,37 @@ export default function Home() {
         console.log('[Page] User already has DID loaded in context:', userDid);
         setExistingDidFound(true);
         setDidCreated(true);
-        setCheckingDid(false);
+        // Reset error counts on success
+        walletErrorCount.current = 0;
+        walletCheckAttempts.current.delete(attemptKey);
         return;
       }
       
       // Check wallet for DID certificates using DidContext function
       if (userWallet && checkWalletForDIDCertificates) {
-        console.log('[Page] Checking wallet for DID certificates...');
-        const didCertResult = await checkWalletForDIDCertificates();
-        
-        if (didCertResult) {
-          console.log('[Page] ✅ Found existing DID certificate:', didCertResult.did);
-          setExistingDidFound(true);
-          setDidCreated(true);
-          setCheckingDid(false);
-          return;
+        try {
+          console.log('[Page] Checking wallet for DID certificates...');
+          const didCertResult = await checkWalletForDIDCertificates();
+          
+          if (didCertResult) {
+            console.log('[Page] ✅ Found existing DID certificate:', didCertResult.did);
+            setExistingDidFound(true);
+            setDidCreated(true);
+            // Reset error counts on success
+            walletErrorCount.current = 0;
+            walletCheckAttempts.current.delete(attemptKey);
+            return;
+          }
+        } catch (didError) {
+          console.warn('[Page] Error checking DID certificates:', didError);
+          // Don't count JSON parse errors (empty wallet) as real errors
+          if (didError.message && didError.message.includes('JSON Parse error')) {
+            console.log('[Page] Wallet appears empty (JSON parse error) - not counting as error');
+          } else {
+            // Only count real network/server errors
+            walletErrorCount.current++;
+            console.log(`[Page] Network error count: ${walletErrorCount.current}/${maxWalletErrors}`);
+          }
         }
       }
       
@@ -305,15 +189,53 @@ export default function Home() {
       if (userWallet) {
         try {
           console.log('[Page] Checking wallet for identity certificates...');
-          const certificates = await userWallet.listCertificates();
+          
+          let certificates;
+          try {
+            certificates = await userWallet.listCertificates();
+          } catch (listError) {
+            console.warn('[Page] Failed to list certificates:', listError);
+            if (listError.message && listError.message.includes('JSON Parse error')) {
+              console.log('[Page] Wallet appears to have no certificates (empty response) - not counting as error');
+              // Continue with empty array
+              certificates = [];
+            } else {
+              // Only count real network/server errors
+              walletErrorCount.current++;
+              console.log(`[Page] Network error count: ${walletErrorCount.current}/${maxWalletErrors}`);
+              throw listError;
+            }
+          }
+          
+          // Handle different response formats
+          let certificateList = certificates;
+          if (typeof certificates === 'string') {
+            try {
+              certificateList = JSON.parse(certificates);
+            } catch (parseError) {
+              console.warn('[Page] Failed to parse certificate response:', parseError);
+              certificateList = [];
+            }
+          }
+          
+          if (!Array.isArray(certificateList)) {
+            if (certificateList && certificateList.certificates && Array.isArray(certificateList.certificates)) {
+              certificateList = certificateList.certificates;
+            } else {
+              certificateList = [];
+            }
+          }
+          
           const identityType = btoa("CommonSource user identity");
-          const identityCerts = certificates.filter(cert => cert.type === identityType);
+          const identityCerts = certificateList.filter(cert => cert.type === identityType);
           
           if (identityCerts.length > 0) {
             console.log('[Page] ✅ Found existing identity certificates:', identityCerts.length);
             setExistingDidFound(true);
             setDidCreated(true);
-            setCheckingDid(false);
+            // Reset error counts on success
+            walletErrorCount.current = 0;
+            walletCheckAttempts.current.delete(attemptKey);
             return;
           }
         } catch (certError) {
@@ -325,6 +247,8 @@ export default function Home() {
       console.log('[Page] No existing certificates or DIDs found - user can create new ones');
       setExistingDidFound(false);
       setDidCreated(false);
+      // Reset attempt tracking on completion (success or no results)
+      walletCheckAttempts.current.delete(attemptKey);
       
     } catch (error) {
       console.error('[Page] Error checking existing certificates:', error);
@@ -333,25 +257,53 @@ export default function Home() {
     }
   }, [checkingDid, certificate, userDid, userWallet, checkWalletForDIDCertificates]);
 
-  // Check for existing certificate when wallet connects
+  // Check for existing certificate when wallet connects (with loop prevention)
   useEffect(() => {
-    if (userPubKey && !certificate && !existingDidFound && !checkingDid) {
-      console.log('Checking for existing certificate for user:', userPubKey);
-      checkExistingCertificate(userPubKey);
+    // Only check if we have pubkey, no certificate, and haven't already checked for this combination
+    if (userPubKey && !certificate && !existingDidFound && !checkingDid && !hasCheckedExisting.current) {
+      console.log('[Page] Wallet connected, initializing certificate check for user:', userPubKey);
+      hasCheckedExisting.current = true;
+      
+      // Reset error counters for new check session
+      walletErrorCount.current = 0;
+      walletCheckAttempts.current.clear();
+      
+      checkExistingCertificate(userPubKey)
+        .then(() => {
+          console.log('[Page] ✅ Certificate check completed');
+        })
+        .catch(error => {
+          console.error('[Page] ❌ Certificate check failed:', error);
+          // Don't reset hasCheckedExisting on error - prevent retry loops
+        });
     }
   }, [userPubKey, certificate, existingDidFound, checkingDid, checkExistingCertificate]);
+  
+  // Reset page-level tracking function
+  const resetPageTracking = useCallback(() => {
+    console.log('[Page] Resetting page-level tracking to allow re-check');
+    hasCheckedExisting.current = false;
+    walletCheckAttempts.current.clear();
+    walletErrorCount.current = 0;
+  }, []);
+
+  // Reset check flag when wallet/pubkey changes or certificate is found
+  useEffect(() => {
+    // Reset when important state changes
+    if (!userPubKey || certificate || existingDidFound) {
+      resetPageTracking();
+    }
+  }, [userPubKey, certificate, existingDidFound, resetPageTracking]);
 
   const handleCreateDid = async () => {
     try {
-      // Initialize wallet if needed
-      let wallet = userWallet;
-      if (!wallet) {
-        console.log('Initializing wallet...');
-        wallet = await initializeWallet();
-        if (!wallet) {
-          throw new Error('Failed to initialize wallet');
-        }
+      // Check if wallet is available
+      if (!userWallet) {
+        toast.error('Wallet not connected. Please refresh the page.');
+        return;
       }
+      
+      const wallet = userWallet;
       
       // Log the user's identity key to help with funding
       const identityKey = await wallet.getPublicKey({ identityKey: true });
@@ -386,6 +338,11 @@ export default function Home() {
       // Step 1: Create user DID first
       console.log('Creating user DID...');
       await createUserDid();
+      
+      // Reset tracking flags to allow re-discovery of the newly created DID
+      resetInitializationFlag();
+      resetPageTracking();
+      
       toast.success('DID created successfully');
       setDidCreated(true);
 
@@ -403,15 +360,13 @@ export default function Home() {
         return;
       }
 
-      // Initialize wallet if needed
-      let wallet = userWallet;
-      if (!wallet) {
-        console.log('Initializing wallet...');
-        wallet = await initializeWallet();
-        if (!wallet) {
-          throw new Error('Failed to initialize wallet');
-        }
+      // Check if wallet is available
+      if (!userWallet) {
+        toast.error('Wallet not connected. Please refresh the page.');
+        return;
       }
+      
+      const wallet = userWallet;
 
       // Create VC data structure for certificate
       console.log('Creating VC data structure...');
@@ -462,33 +417,115 @@ export default function Home() {
       console.log('Certifier URL:', certifierUrl);
       console.log('Server Public Key:', serverPubKey);
 
-      // Use custom certificate acquisition to bypass substrate issues
-      console.log('Using custom certificate acquisition with Railway server...');
-      const certResponse = await acquireCertificateCustom(wallet, {
+      // Use official BSV SDK acquireCertificate method now that user has modified SDK
+      console.log('Using official BSV SDK acquireCertificate for VC certificates...');
+      
+      const certificateFields = {
+        // Include all fields for backward compatibility and age verification
+        username: username,
+        residence: residence,
+        age: age,  // CRITICAL: This is needed for age verification in whiskey store
+        gender: gender,
+        email: email,
+        work: work,
+        // VC metadata
+        isVC: "true",
+        didRef: didRef
+      };
+      
+      const serverPublicKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4";
+      
+      const certificateResult = await wallet.acquireCertificate({
         type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
-        fields: {
-          // Include all fields for backward compatibility and age verification
-          username: username,
-          residence: residence,
-          age: age,  // CRITICAL: This is needed for age verification in whiskey store
-          gender: gender,
-          email: email,
-          work: work,
-          // VC metadata
-          isVC: "true",
-          didRef: didRef
-        },
-        acquisitionProtocol: "issuance",
-        certifier: serverPubKey,
-        certifierUrl: certifierUrl,
+        fields: certificateFields,
+        certifier: serverPublicKey,
+        acquisitionProtocol: "direct",
+        keyringRevealer: certifierUrl,
+        serialNumber: Utils.toBase64(Utils.toArray(Date.now().toString(), 'utf8'))
       });
       
-      console.log('Certificate with VC data acquired:', certResponse);
+      console.log('[VC Cert] ✅ VC certificate acquired via BSV SDK:', {
+        type: certificateResult.type,
+        serialNumber: certificateResult.serialNumber?.substring(0, 16) + '...',
+        subject: certificateResult.subject?.substring(0, 16) + '...',
+        certifier: certificateResult.certifier?.substring(0, 16) + '...'
+      });
+      
+      const certResponse = certificateResult;  // Use the real certificate object
+      
+      /* COMMENTED OUT: Previous working HTTP-based certificate acquisition (from commit 6ec9264)
+      // This bypassed the BSV SDK P2P issues that were causing "Array.from" errors
+      console.log('Using working custom HTTP certificate acquisition to bypass P2P issues...');
+      
+      // Get user's identity key for BSV auth
+      const { publicKey: subject } = await wallet.getPublicKey({ identityKey: true });
+      console.log('[VC Cert] User identity key:', subject);
+      
+      // Generate client nonce for replay protection
+      const serverPublicKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4";
+      console.log('[VC Cert] Generating client nonce...');
+      const clientNonce = await createNonce(wallet, serverPublicKey);
+      console.log('[VC Cert] Client nonce generated:', clientNonce?.substring(0, 16) + '...');
+      
+      // Make direct HTTP request to certificate server (working pattern)
+      console.log('[VC Cert] Making request to:', certifierUrl + '/signCertificate');
+      
+      const response = await fetch(certifierUrl + '/signCertificate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-bsv-auth-identity-key': subject  // BSV auth header
+        },
+        body: JSON.stringify({
+          clientNonce: clientNonce,  // Required for replay protection
+          type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
+          fields: certificateFields,
+          acquisitionProtocol: "issuance",  // Required by server
+          certifier: serverPublicKey,
+          certifierUrl: process.env.NEXT_PUBLIC_CERTIFIER_URL || "http://localhost:8080"
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Certificate server responded with ${response.status}: ${response.statusText}`);
+      }
+      
+      // Server returns binary certificate data in BSV SDK format (success byte + certificate binary)
+      const responseBuffer = await response.arrayBuffer();
+      console.log('[VC Cert] Received response buffer, length:', responseBuffer.byteLength);
+      
+      // Parse BSV SDK response format: success_byte + certificate_binary
+      const responseArray = new Uint8Array(responseBuffer);
+      const successByte = responseArray[0];
+      
+      if (successByte !== 0) {
+        throw new Error(`Certificate issuance failed with status code: ${successByte}`);
+      }
+      
+      // Extract the certificate binary data (everything after the success byte)
+      const certificateData = responseArray.slice(1);
+      console.log('[VC Cert] Extracted certificate binary, length:', certificateData.length);
+      
+      // Deserialize the certificate using BSV SDK
+      const certificate = Certificate.fromBinary(certificateData);
+      console.log('[VC Cert] Certificate deserialized successfully:', {
+        type: certificate.type,
+        serialNumber: certificate.serialNumber?.substring(0, 16) + '...',
+        subject: certificate.subject?.substring(0, 16) + '...',
+        certifier: certificate.certifier?.substring(0, 16) + '...'
+      });
+      
+      // Store the certificate in the wallet (this was the missing piece!)
+      await wallet.storeCertificate(certificate);
+      console.log('[VC Cert] Certificate stored in MetaNet Desktop wallet');
+      
+      const certResponse = certificate;  // Use the real certificate object
+      */
       
       // Trigger authentication check to detect the new certificate
       console.log('Triggering authentication check to detect new certificate...');
       
-      // Set certificate directly in wallet context to trigger state update
+      // Set the real certificate in wallet context to trigger state update
       setCertificate(certResponse);
       
       toast.success('Identity certificate generated successfully');
@@ -546,7 +583,7 @@ export default function Home() {
   // Test handler for DID document certificate storage
   const handleTestDidCertificate = async () => {
     try {
-      if (!wallet) {
+      if (!userWallet) {
         toast.error('Please connect wallet first');
         return;
       }
@@ -558,7 +595,7 @@ export default function Home() {
 
       toast.info('Testing DID document certificate storage...');
       
-      const result = await testDidDocumentCertificate(wallet, didService, serverPubKey);
+      const result = await testDidDocumentCertificate(userWallet, didService, serverPubKey);
       
       if (result.success) {
         toast.success(`✅ DID Certificate Test PASSED! DID: ${result.didDocument.id}`);
@@ -574,16 +611,21 @@ export default function Home() {
   // Test handler for DID resolution from certificates
   const handleTestDidResolution = async () => {
     try {
-      if (!wallet) {
+      if (!userWallet) {
         toast.error('Please connect wallet first');
         return;
       }
 
       // For testing, we'll try to resolve any existing DID
       // In a real scenario, you'd pass a specific DID ID
-      const certificates = await wallet.listCertificates();
-      const didDocumentType = btoa("DID Document");
-      const didCerts = certificates.filter(cert => cert.type === didDocumentType);
+      const certificates = await userWallet.listCertificates();
+      // Filter for CommonSource identity certificates that contain DID data (isDID field)
+      const commonSourceType = btoa("CommonSource user identity");
+      const didCerts = certificates.filter(cert => 
+        cert.type === commonSourceType && 
+        cert.fields && 
+        cert.fields.isDID === 'true'
+      );
       
       if (didCerts.length === 0) {
         toast.info('No DID certificates found. Run DID Certificate Test first.');
@@ -593,7 +635,7 @@ export default function Home() {
       const testDid = didCerts[0].fields.didId;
       toast.info(`Testing DID resolution for: ${testDid}`);
       
-      const result = await resolveDIDFromCertificate(wallet, testDid);
+      const result = await resolveDIDFromCertificate(userWallet, testDid);
       
       if (result.found) {
         toast.success(`✅ DID Resolution PASSED! Resolved: ${result.didDocument.id}`);
@@ -605,6 +647,40 @@ export default function Home() {
     } catch (error) {
       console.error('[UI Test] DID Resolution test failed:', error);
       toast.error(`❌ DID Resolution Test FAILED: ${error.message}`);
+    }
+  }
+
+  // Clear certificates and localStorage
+  const handleClearStorage = async () => {
+    try {
+      if (!userWallet) {
+        toast.error('Please connect wallet first');
+        return;
+      }
+
+      console.log('[Clear] Clearing all storage...');
+      
+      // Clear browser localStorage
+      localStorage.clear();
+      console.log('[Clear] Browser localStorage cleared');
+      
+      // Clear userDid and related state
+      if (userPubKey) {
+        const storedDidKey = `user_did_${userPubKey}`;
+        localStorage.removeItem(storedDidKey);
+        console.log('[Clear] DID localStorage cleared for user:', userPubKey);
+      }
+      
+      // Reset page state
+      resetPageTracking();
+      resetInitializationFlag();
+      
+      toast.success('✅ Storage cleared! Refresh the page to start fresh.');
+      console.log('[Clear] ✅ All storage cleared successfully');
+      
+    } catch (error) {
+      console.error('[Clear] Error clearing storage:', error);
+      toast.error(`❌ Error clearing storage: ${error.message}`);
     }
   }
 
@@ -623,7 +699,11 @@ export default function Home() {
   if (certificate) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <LoggedInPage />
+        <LoggedInPage 
+          certificate={certificate}
+          userPubKey={userPubKey}
+          setCertificate={setCertificate}
+        />
       </div>
     )
   }
@@ -746,6 +826,22 @@ export default function Home() {
                       className="w-full text-sm"
                     >
                       Test DID Resolution
+                    </Button>
+                    <Button
+                      onClick={() => debugStorageState()}
+                      disabled={!userWallet}
+                      variant="outline"
+                      className="w-full text-sm"
+                    >
+                      Debug Storage State
+                    </Button>
+                    <Button
+                      onClick={handleClearStorage}
+                      disabled={!userWallet}
+                      variant="destructive"
+                      className="w-full text-sm"
+                    >
+                      Clear All Storage
                     </Button>
                   </div>
                 </div>

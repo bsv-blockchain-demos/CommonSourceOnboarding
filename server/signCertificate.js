@@ -41,15 +41,24 @@ export async function signCertificate(req, res) {
     try {
         // Body response from Metanet desktop walletclient
         const body = req.body;
-        const { clientNonce, type, fields, masterKeyring } = body;
+        console.log('[signCertificate] Full request body:', JSON.stringify(body, null, 2));
+        const { clientNonce, type, fields, masterKeyring, acquisitionProtocol } = body;
         
         // Extract subject from BSV auth headers since we're not using auth middleware
         const subject = req.headers['x-bsv-auth-identity-key'];
         console.log('[signCertificate] Subject from headers:', subject);
+        console.log('[signCertificate] All headers:', JSON.stringify(req.headers, null, 2));
         
         if (!subject) {
             console.error('[signCertificate] No subject identity key found in headers');
-            return res.status(400).json({ error: 'Missing identity key in request headers' });
+            // Return BRC-103 binary error format instead of JSON
+            const errorMessage = 'Missing identity key in request headers';
+            const responseWriter = new Utils.Writer();
+            responseWriter.writeUInt8(1); // Error code (1 = error)
+            const messageBytes = Utils.toArray(errorMessage, 'utf8');
+            responseWriter.writeUInt32LE(messageBytes.length); // Message length
+            responseWriter.write(messageBytes);
+            return res.status(400).send(Buffer.from(responseWriter.toArray()));
         }
 
         // Get all wallet info
@@ -58,39 +67,82 @@ export async function signCertificate(req, res) {
 
         console.log({ subject })
 
-        // Decrypt certificate fields and verify them before signing
-        const decryptedFields = await MasterCertificate.decryptFields(
-            serverWallet,
-            masterKeyring,
-            fields,
-            subject
-        );
-
-        console.log('Fields decrypted, isVC:', decryptedFields?.isVC);
+        console.log('[signCertificate] Processing certificate with BSV SDK patterns');
         
-        // Check if this is a VC-structured certificate (new format)
-        const isVCCertificate = decryptedFields && decryptedFields.isVC === 'true';
+        let decryptedFields;
+        
+        // Check if certificate data is already unencrypted (new format)
+        const isAlreadyDecrypted = fields && (fields.isVC === 'true' || fields.isDID === 'true');
+        
+        if (isAlreadyDecrypted) {
+            console.log('[signCertificate] Certificate data is already unencrypted, using fields directly');
+            decryptedFields = fields;
+        } else {
+            // Legacy encrypted certificate handling
+            console.log('[signCertificate] Processing encrypted certificate with BSV SDK patterns');
+            if (!masterKeyring || !clientNonce) {
+                console.error('[signCertificate] Encrypted certificate requires masterKeyring and clientNonce');
+                // Return BRC-103 binary error format instead of JSON
+                const errorMessage = 'Encrypted certificate requires masterKeyring and clientNonce';
+                const responseWriter = new Utils.Writer();
+                responseWriter.writeUInt8(1); // Error code (1 = error)
+                const messageBytes = Utils.toArray(errorMessage, 'utf8');
+                responseWriter.writeUInt32LE(messageBytes.length); // Message length
+                responseWriter.write(messageBytes);
+                return res.status(400).send(Buffer.from(responseWriter.toArray()));
+            }
+            
+            // Decrypt certificate fields using BSV SDK patterns
+            decryptedFields = await MasterCertificate.decryptFields(
+                serverWallet,
+                masterKeyring,
+                fields,
+                subject
+            );
+        }
 
-        // Verify client nonce for replay protection
+        console.log('Fields processed, isVC:', decryptedFields?.isVC, 'isDID:', decryptedFields?.isDID);
+        
+        // Check certificate types
+        const isVCCertificate = decryptedFields && decryptedFields.isVC === 'true';
+        const isDIDCertificate = decryptedFields && decryptedFields.isDID === 'true';
+
+        // Verify client nonce for replay protection (standard BSV pattern for all certificates)
         console.log('Verifying client nonce for replay protection...');
+        let serverNonce, validatedClientNonce;
         try {
             const valid = await verifyNonce(clientNonce, serverWallet, subject);
             if (!valid) {
                 console.log('Nonce verification failed for subject:', subject);
-                return res.status(400).json({ error: 'Invalid client nonce - replay protection failed' });
+                // Return BRC-103 binary error format instead of JSON
+                const errorMessage = 'Invalid client nonce - replay protection failed';
+                const responseWriter = new Utils.Writer();
+                responseWriter.writeUInt8(1); // Error code (1 = error)
+                const messageBytes = Utils.toArray(errorMessage, 'utf8');
+                responseWriter.writeUInt32LE(messageBytes.length); // Message length
+                responseWriter.write(messageBytes);
+                return res.status(400).send(Buffer.from(responseWriter.toArray()));
             }
             console.log('Client nonce verification passed');
+            validatedClientNonce = clientNonce;
         } catch (nonceError) {
             console.error('Error during nonce verification:', nonceError);
-            return res.status(400).json({ error: 'Nonce verification error: ' + nonceError.message });
+            // Return BRC-103 binary error format instead of JSON
+            const errorMessage = 'Nonce verification error: ' + nonceError.message;
+            const responseWriter = new Utils.Writer();
+            responseWriter.writeUInt8(1); // Error code (1 = error)
+            const messageBytes = Utils.toArray(errorMessage, 'utf8');
+            responseWriter.writeUInt32LE(messageBytes.length); // Message length
+            responseWriter.write(messageBytes);
+            return res.status(400).send(Buffer.from(responseWriter.toArray()));
         }
-        const serverNonce = await createNonce(serverWallet, subject);
+        serverNonce = await createNonce(serverWallet, subject);
 
         // The server computes a serial number from the client and server nonces
         const { hmac } = await serverWallet.createHmac({
-            data: Utils.toArray(clientNonce + serverNonce, 'base64'),
+            data: Utils.toArray(validatedClientNonce + serverNonce, 'base64'),
             protocolID: [2, 'certificate issuance'],
-            keyID: serverNonce + clientNonce,
+            keyID: serverNonce + validatedClientNonce,
             counterparty: subject
         });
         const serialNumber = Utils.toBase64(hmac);
@@ -169,12 +221,15 @@ export async function signCertificate(req, res) {
         const documentToSave = { 
             signedCertificate: signedCertificate,
             isVCCertificate: isVCCertificate,
+            isDIDCertificate: isDIDCertificate,
             createdAt: new Date(),
             updatedAt: new Date()
         };
 
-        // If it's a VC certificate, create and store the full VC data separately
+        // Handle VC certificate processing
         if (isVCCertificate) {
+            console.log('[signCertificate] Processing VC certificate for database storage');
+            
             // Reuse existing DID or generate a persistent DID based on user's public key
             // This allows the same DID to be reused across certificate renewals/reissues
             let userDid = existingDid;
@@ -209,6 +264,25 @@ export async function signCertificate(req, res) {
             documentToSave.didRef = decryptedFields.didRef;
         }
         
+        // Handle DID certificate processing
+        if (isDIDCertificate) {
+            console.log('[signCertificate] Processing DID certificate for database storage');
+            
+            // Store DID-specific data
+            documentToSave.didId = decryptedFields.didId;
+            documentToSave.didDocument = decryptedFields.didDocument;
+            documentToSave.didVersion = decryptedFields.version || '1.0';
+            documentToSave.didCreated = decryptedFields.created;
+            documentToSave.didUpdated = decryptedFields.updated;
+            
+            console.log('[signCertificate] DID certificate data prepared:', {
+                didId: documentToSave.didId,
+                didVersion: documentToSave.didVersion,
+                didCreated: documentToSave.didCreated,
+                didUpdated: documentToSave.didUpdated
+            });
+        }
+        
         // Use the certificate subject as the ID
         const documentId = signedCertificate.subject || subject;
         console.log('DEBUG: signedCertificate.subject:', signedCertificate.subject);
@@ -225,7 +299,7 @@ export async function signCertificate(req, res) {
         //     { upsert: true }
         // );
         
-        console.log(`Certificate would be saved for subject: ${documentId}, VC format: ${isVCCertificate} (MongoDB disabled temporarily)`);
+        console.log(`Certificate would be saved for subject: ${documentId}, VC format: ${isVCCertificate}, DID format: ${isDIDCertificate} (MongoDB disabled temporarily)`);
         
         // BSV SDK's acquireCertificate expects the certificate as a plain object
         // Need to serialize the Certificate properly
@@ -239,52 +313,96 @@ export async function signCertificate(req, res) {
         console.log('CERT DEBUG - Has signature:', !!signedCertificate.signature);
         console.log('CERT DEBUG - Signature length:', signedCertificate.signature?.length);
         
-        // Convert Certificate object to plain object for JSON serialization
-        // Ensure fields is an object, not an array or null
-        const certificateForResponse = {
-            type: signedCertificate.type,
-            serialNumber: signedCertificate.serialNumber,
-            subject: signedCertificate.subject,
-            certifier: signedCertificate.certifier,
-            revocationOutpoint: signedCertificate.revocationOutpoint,
-            signature: signedCertificate.signature,
-            fields: signedCertificate.fields || {}
-        };
+        // Return certificate in BRC-103 binary format for MetaNet Desktop acquireCertificate
+        console.log('Returning certificate in BRC-103 binary format for MetaNet Desktop...');
         
-        console.log('CERT DEBUG - Fields type:', typeof certificateForResponse.fields);
-        console.log('CERT DEBUG - Fields is array:', Array.isArray(certificateForResponse.fields));
-        
-        console.log('CERT RESPONSE - All fields present:', {
-            type: !!certificateForResponse.type,
-            serialNumber: !!certificateForResponse.serialNumber,
-            subject: !!certificateForResponse.subject,
-            certifier: !!certificateForResponse.certifier,
-            revocationOutpoint: !!certificateForResponse.revocationOutpoint,
-            signature: !!certificateForResponse.signature,
-            fields: !!certificateForResponse.fields
-        });
-        
-        // Try returning just the certificate object directly
-        // The BSV SDK acquireCertificate might expect the raw certificate object
-        console.log('Returning certificate object directly (no wrapper)');
-        console.log('Certificate has all required fields:', {
-            type: !!certificateForResponse.type,
-            serialNumber: !!certificateForResponse.serialNumber,
-            subject: !!certificateForResponse.subject,
-            certifier: !!certificateForResponse.certifier,
-            revocationOutpoint: !!certificateForResponse.revocationOutpoint,
-            signature: !!certificateForResponse.signature
-        });
-        
-        res.setHeader('Content-Type', 'application/json');
+        // Set appropriate headers for binary response
+        res.setHeader('Content-Type', 'application/octet-stream');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Headers', '*');
         res.setHeader('Access-Control-Allow-Methods', '*');
         
-        return res.status(200).json(certificateForResponse);
+        console.log('Converting certificate to binary format using BSV SDK');
+        
+        // COMPREHENSIVE VALIDATION: Check certificate is ready for binary conversion
+        if (!signedCertificate.signature) {
+            throw new Error('Certificate signature is missing - cannot convert to binary');
+        }
+        if (!signedCertificate.serialNumber || !signedCertificate.subject || !signedCertificate.certifier) {
+            throw new Error('Certificate missing required fields for binary conversion');
+        }
+        
+        console.log('VALIDATION: Certificate structure validated, proceeding with binary conversion');
+        console.log('CERT FIELDS:', {
+            type: !!signedCertificate.type,
+            serialNumber: !!signedCertificate.serialNumber, 
+            subject: !!signedCertificate.subject,
+            certifier: !!signedCertificate.certifier,
+            fields: !!signedCertificate.fields,
+            signature: !!signedCertificate.signature
+        });
+        
+        // Convert certificate to binary format using BSV SDK's toBinary method
+        let certBinary;
+        try {
+            certBinary = signedCertificate.toBinary();
+            console.log('BINARY CONVERSION: Success, certificate binary length:', certBinary.length);
+            
+            // Validate binary data
+            if (!certBinary || certBinary.length === 0) {
+                throw new Error('toBinary() returned empty or null data');
+            }
+            if (!(certBinary instanceof Uint8Array) && !Array.isArray(certBinary)) {
+                throw new Error('toBinary() returned non-array-like object: ' + typeof certBinary);
+            }
+            
+            console.log('BINARY VALIDATION: Binary data type:', Object.prototype.toString.call(certBinary));
+            console.log('BINARY VALIDATION: First 10 bytes:', Array.from(certBinary.slice(0, 10)));
+            console.log('BINARY VALIDATION: Last 10 bytes:', Array.from(certBinary.slice(-10)));
+            
+        } catch (binaryError) {
+            console.error('BINARY CONVERSION ERROR:', binaryError);
+            throw new Error(`Certificate toBinary() failed: ${binaryError.message}`);
+        }
+        
+        // TEST: Try returning certificate binary directly (without Utils.Writer wrapper)
+        // This tests if the issue is with our BRC-103 success byte prefix format
+        const USE_DIRECT_BINARY = process.env.USE_DIRECT_BINARY === 'true';
+        
+        if (USE_DIRECT_BINARY) {
+            console.log('ALTERNATIVE TEST: Returning certificate binary directly (no success byte)');
+            return res.status(200).send(Buffer.from(certBinary));
+        }
+        
+        // Return the binary certificate data as required by BRC-103 protocol
+        const responseWriter = new Utils.Writer();
+        responseWriter.writeUInt8(0); // Success code (0 = success)
+        responseWriter.write(certBinary);
+        const responseData = responseWriter.toArray();
+        
+        console.log('RESPONSE WRITER: Success, total response length:', responseData.length);
+        console.log('RESPONSE WRITER: Response data type:', Object.prototype.toString.call(responseData));
+        console.log('RESPONSE WRITER: First 5 bytes:', Array.from(responseData.slice(0, 5)));
+        
+        // ADDITIONAL TEST: Validate that responseData is array-like before sending
+        if (!responseData || responseData.length === 0) {
+            throw new Error('Utils.Writer.toArray() returned empty data');
+        }
+        if (!(responseData instanceof Uint8Array) && !Array.isArray(responseData)) {
+            throw new Error('Utils.Writer.toArray() returned non-array-like object: ' + typeof responseData);
+        }
+        
+        return res.status(200).send(Buffer.from(responseData));
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
-        return res.status(500).json({ error: error.message || error });
+        // Return BRC-103 binary error format instead of JSON
+        const errorMessage = error.message || 'Unknown certificate signing error';
+        const responseWriter = new Utils.Writer();
+        responseWriter.writeUInt8(1); // Error code (1 = error)
+        const messageBytes = Utils.toArray(errorMessage, 'utf8');
+        responseWriter.writeUInt32LE(messageBytes.length);
+        responseWriter.write(messageBytes);
+        return res.status(500).send(Buffer.from(responseWriter.toArray()));
     }
 }

@@ -1,14 +1,13 @@
 "use client";
 
 import { useContext, createContext, useState, useEffect, useCallback } from "react";
-import { useWalletContext } from "../context/walletContext";
+import { WalletClient } from "@bsv/sdk";
 import { useDidContext } from "../context/DidContext";
 import { unifiedAuth } from '../lib/authentication';
 
 const AuthContext = createContext();
 
-export const AuthContextProvider = ({ children }) => {
-  const { setCertificate, userWallet } = useWalletContext();
+export const AuthContextProvider = ({ children, userWallet, setCertificate }) => {
   const { verifyCertificateVC, isVCCertificate, bsvDidService, bsvVcService } = useDidContext();
 
   // Enhanced login with unified authentication and VC verification

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { WalletClient, Utils } from "@bsv/sdk";
+import { Utils } from "@bsv/sdk";
+import { walletService } from "../../lib/WalletService";
 
 export async function POST(req) {
     try {
-        const userWallet = new WalletClient('auto');
+        const userWallet = await walletService.getWallet();
         
         // List all certificates first
         const certificatesResponse = await userWallet.listCertificates({
@@ -21,7 +22,7 @@ export async function POST(req) {
                 const result = await userWallet.relinquishCertificate({
                     type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
                     serialNumber: cert.serialNumber,
-                    certifier: process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY,
+                    certifier: process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4",
                 });
                 results.push({ serialNumber: cert.serialNumber, result });
             } catch (error) {

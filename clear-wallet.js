@@ -1,9 +1,10 @@
-import { WalletClient, Utils } from '@bsv/sdk';
+import { Utils } from '@bsv/sdk';
+import { walletService } from './src/lib/WalletService.js';
 
 async function clearWallet() {
     try {
         console.log('Connecting to wallet...');
-        const userWallet = new WalletClient('auto', process.env.WALLET_STORAGE_URL || 'localhost');
+        const userWallet = await walletService.getWallet();
         
         // List all certificates
         console.log('Listing all certificates...');
@@ -29,7 +30,7 @@ async function clearWallet() {
                 const result = await userWallet.relinquishCertificate({
                     type: cert.type,
                     serialNumber: cert.serialNumber,
-                    certifier: cert.certifier
+                    certifier: process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4",
                 });
                 console.log('Certificate relinquished:', result);
             } catch (error) {

@@ -12,10 +12,6 @@ export async function POST(req) {
             console.log('[CheckDID] No public key provided');
             return NextResponse.json({ error: 'Public key is required' }, { status: 400 });
         }
-
-        console.log('[CheckDID] Connecting to MongoDB...');
-        await connectToMongo();
-        console.log('[CheckDID] MongoDB connected successfully');
         
         // Check if user has existing record with DID
         console.log('[CheckDID] Querying for existing record...');

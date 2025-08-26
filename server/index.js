@@ -97,11 +97,25 @@ app.use((req, res, next) => {
 
 app.use(bodyParser.json())
 
+// Add BRC-104 HTTP transport discovery endpoint BEFORE auth middleware
+app.get('/.well-known/auth', (_req, res) => {
+  console.log('[AUTH] BRC-104 discovery endpoint accessed');
+  res.json({
+    identityKey: serverPublicKey,
+    services: {
+      certificateIssuance: {
+        endpoint: '/acquireCertificate',
+        protocol: 'BRC-103'
+      }
+    }
+  });
+});
+
 // 4. Apply the auth middleware to all routes EXCEPT /signCertificate
 app.use((req, res, next) => {
   if (req.path === '/signCertificate') {
     // Skip auth middleware for certificate signing - it's a public issuance endpoint
-    console.log('[AUTH] Bypassing auth middleware for certificate signing');
+    console.log(`[AUTH] Bypassing auth middleware for ${req.path}`);
     next();
   } else {
     // Apply auth middleware to all other routes
@@ -122,6 +136,8 @@ app.use((req, _res, next) => {
 
 // 5. Define your routes as usual
 app.post('/signCertificate', signCertificate)
+// BSV SDK expects this endpoint name for acquireCertificate
+app.post('/acquireCertificate', signCertificate)
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {

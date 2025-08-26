@@ -1,12 +1,10 @@
 import React, { useEffect } from "react";
-import { useWalletContext } from "../context/walletContext";
 import { toast } from 'react-hot-toast';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { CheckCircle, LogOut, Trash2, ArrowLeft, RefreshCw } from "lucide-react";
 
-const LoggedInPage = () => {
-    const { certificate, userPubKey, setCertificate } = useWalletContext();
+const LoggedInPage = ({ certificate, userPubKey, setCertificate }) => {
     
     // Check for return URL and redirect if needed
     useEffect(() => {
