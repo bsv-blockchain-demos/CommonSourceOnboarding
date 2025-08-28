@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Utils } from "@bsv/sdk";
-import { walletService } from "../../lib/WalletService";
+import { walletService } from "../../../lib/WalletService";
 
 export async function POST(req) {
     try {
