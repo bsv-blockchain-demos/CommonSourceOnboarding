@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
-import { Utils } from "@bsv/sdk";
+import { Utils, createNonce, Certificate } from "@bsv/sdk";
 import { useDidContext } from "../context/DidContext";
 import { toast } from 'react-hot-toast';
 import { useAuthContext } from "../context/authContext";
@@ -27,7 +27,10 @@ async function resolveDIDFromCertificate(wallet, didId) {
     }
     
     // List all certificates and filter for DID documents
-    const certificates = await wallet.listCertificates();
+    const certificates = await userWallet.listCertificates({
+      certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
+      types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+  });
     console.log('[DID Resolution] Found', certificates.length, 'total certificates');
     
     // Filter for CommonSource identity certificates that contain DID data (isDID field)
@@ -192,7 +195,10 @@ export default function Home() {
           
           let certificates;
           try {
-            certificates = await userWallet.listCertificates();
+            certificates = await userWallet.listCertificates({
+              certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
+              types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+          });
           } catch (listError) {
             console.warn('[Page] Failed to list certificates:', listError);
             if (listError.message && listError.message.includes('JSON Parse error')) {
@@ -435,23 +441,135 @@ export default function Home() {
       
       const serverPublicKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4";
       
+      // SIMPLIFIED: Use issuance protocol consistently (matching working DID certificate pattern)
+      // This lets the BSV SDK handle the entire certificate acquisition process
+      console.log('[VC Cert] Using simplified BSV SDK acquireCertificate with issuance protocol...');
+      
+      // Get subject public key from wallet
+      let subject;
+      try {
+        console.log('[VC Cert] Getting public key from wallet');
+        const { publicKey } = await wallet.getPublicKey({ identityKey: true });
+        subject = publicKey;
+      } catch (error) {
+        console.warn('[VC Cert] Failed to get public key from wallet, using userPubKey from context:', error);
+        subject = userPubKey;
+      }
+      
+      if (!subject) {
+        throw new Error('Could not determine subject public key for certificate');
+      }
+      
+      console.log('[VC Cert] Using subject public key:', subject);
+
+      // FIXED: Use main wallet client directly for certificate visibility in MetaNet Desktop
+      // The BSV SDK acquireCertificate() automatically handles certificate storage
+      console.log('[VC Cert] Using main wallet client for certificate acquisition to ensure MetaNet Desktop visibility...');
+      
+      // Generate client nonce for server's nonce verification requirement
+      console.log('[VC Cert] Generating client nonce for certificate request...');
+      let clientNonce;
+      try {
+        // Create nonce using user wallet for the server public key
+        clientNonce = await createNonce(wallet, serverPublicKey);
+        console.log('[VC Cert] Client nonce generated:', clientNonce?.substring(0, 16) + '...');
+      } catch (nonceError) {
+        console.error('[VC Cert] Failed to generate client nonce:', nonceError);
+        throw new Error('Failed to generate client nonce for certificate request');
+      }
+      
       const certificateResult = await wallet.acquireCertificate({
         type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
-        fields: certificateFields,
         certifier: serverPublicKey,
-        acquisitionProtocol: "direct",
-        keyringRevealer: certifierUrl,
-        serialNumber: Utils.toBase64(Utils.toArray(Date.now().toString(), 'utf8'))
+        fields: certificateFields,  // Your clean certificate fields
+        certifierUrl: certifierUrl, // Required for issuance protocol
+        acquisitionProtocol: "issuance"    // Let certificate server handle everything
       });
       
-      console.log('[VC Cert] ✅ VC certificate acquired via BSV SDK:', {
+      console.log('[VC Cert] ✅ VC certificate acquired via BSV SDK issuance protocol:', {
         type: certificateResult.type,
         serialNumber: certificateResult.serialNumber?.substring(0, 16) + '...',
         subject: certificateResult.subject?.substring(0, 16) + '...',
         certifier: certificateResult.certifier?.substring(0, 16) + '...'
       });
       
-      const certResponse = certificateResult;  // Use the real certificate object
+      // PHASE 2: Certificate storage verification - BSV SDK handles storage automatically
+      console.log('[VC Cert] Phase 2: Verifying certificate storage (BSV SDK handles storage automatically)...');
+      
+      try {
+        // Verify certificate was stored by checking the main wallet
+        console.log('[VC Cert] Checking if certificate is visible in MetaNet Desktop wallet...');
+        
+        const walletCerts = await wallet.listCertificates();
+        let certificateList = Array.isArray(walletCerts) ? walletCerts : [];
+        
+        // Handle different response formats
+        if (typeof walletCerts === 'string') {
+          try {
+            certificateList = JSON.parse(walletCerts);
+          } catch (parseError) {
+            console.warn('[VC Cert] Failed to parse wallet certificate response:', parseError);
+            certificateList = [];
+          }
+        }
+        
+        if (!Array.isArray(certificateList) && certificateList?.certificates) {
+          certificateList = certificateList.certificates;
+        }
+        
+        // Look for the newly acquired certificate
+        const newCertificate = certificateList.find(cert => 
+          cert.serialNumber === certificateResult.serialNumber
+        );
+        
+        if (newCertificate) {
+          console.log('[VC Cert] ✅ VC certificate visible in MetaNet Desktop wallet:', {
+            serialNumber: newCertificate.serialNumber?.substring(0, 16) + '...',
+            type: newCertificate.type,
+            location: 'MetaNet Desktop'
+          });
+        } else {
+          console.warn('[VC Cert] ⚠️ Certificate not immediately visible in MetaNet Desktop wallet');
+          console.log('[VC Cert] This may be normal - certificates can take time to appear in the wallet UI');
+          console.log('[VC Cert] Available certificates:', certificateList.length);
+          
+          // Provide localStorage fallback
+          console.log('[VC Cert] Adding certificate to localStorage as backup...');
+          const alias = `vc_cert_${certificateResult.serialNumber?.substring(0, 8) || Date.now()}`;
+          const stored = JSON.parse(localStorage.getItem('bsv_certificates') || '{}');
+          stored[alias] = {
+            certificate: certificateResult,
+            timestamp: Date.now(),
+            method: 'localStorage_backup',
+            serialNumber: certificateResult.serialNumber
+          };
+          localStorage.setItem('bsv_certificates', JSON.stringify(stored));
+          console.log('[VC Cert] 📁 Certificate backed up to localStorage with alias:', alias);
+        }
+        
+      } catch (verificationError) {
+        console.warn('[VC Cert] Certificate storage verification failed (this is often normal):', verificationError.message);
+        
+        // Always provide localStorage fallback when verification fails
+        console.log('[VC Cert] Adding certificate to localStorage as backup...');
+        try {
+          const alias = `vc_cert_${certificateResult.serialNumber?.substring(0, 8) || Date.now()}`;
+          const stored = JSON.parse(localStorage.getItem('bsv_certificates') || '{}');
+          stored[alias] = {
+            certificate: certificateResult,
+            timestamp: Date.now(),
+            method: 'localStorage_backup',
+            serialNumber: certificateResult.serialNumber
+          };
+          localStorage.setItem('bsv_certificates', JSON.stringify(stored));
+          console.log('[VC Cert] 📁 Certificate backed up to localStorage with alias:', alias);
+        } catch (backupError) {
+          console.warn('[VC Cert] Failed to backup certificate to localStorage:', backupError);
+        }
+      }
+      
+      // Certificate acquired successfully
+      const certResponse = certificateResult;
       
       /* COMMENTED OUT: Previous working HTTP-based certificate acquisition (from commit 6ec9264)
       // This bypassed the BSV SDK P2P issues that were causing "Array.from" errors

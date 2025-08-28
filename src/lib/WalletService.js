@@ -55,9 +55,9 @@ class WalletService {
       
       // Try different substrates in order of preference
       const substrates = [
-        { name: 'auto', config: 'auto' },
-        { name: 'window.CWI', config: 'window.CWI' },
-        { name: 'cicada', config: 'cicada' },
+        //{ name: 'auto', config: 'auto' },
+        //{ name: 'window.CWI', config: 'window.CWI' },
+        //{ name: 'cicada', config: 'cicada' },
         { name: 'json-api', config: 'json-api' }
       ];
       let wallet = null;
@@ -68,8 +68,7 @@ class WalletService {
         try {
           console.log(`[WalletService] 🔄 Trying substrate: ${substrate.name}`);
           // Use the certificate server URL for HTTP substrates
-          const serverUrl = process.env.NEXT_PUBLIC_CERTIFIER_URL || 'http://localhost:8080';
-          wallet = new WalletClient(substrate.config, serverUrl);
+          wallet = new WalletClient(substrate.config, 'localhost');
           
           // Force connection to substrate
           console.log(`[WalletService] Connecting to substrate...`);
@@ -86,6 +85,7 @@ class WalletService {
             console.log(`[WalletService] Getting public key...`);
             const { publicKey } = await wallet.getPublicKey({ identityKey: true });
             console.log(`[WalletService] Got public key: ${publicKey?.substring(0, 16)}...`);
+
             
             // Success! Store the working configuration
             this.walletInstance = wallet;

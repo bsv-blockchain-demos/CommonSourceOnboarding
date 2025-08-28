@@ -34,6 +34,33 @@ async function makeWallet(chain, storageURL, privateKey) {
     return wallet;
 }
 
+// 🔄 Helper function to detect HTTPWalletJSON requests
+function isHTTPWalletJSONRequest(req, acquisitionProtocol) {
+    return req.headers['content-type']?.includes('application/json') ||
+           req.headers['accept']?.includes('application/json') ||
+           req.headers['user-agent']?.includes('HTTPWalletJSON') ||
+           acquisitionProtocol === 'issuance'; // HTTPWalletJSON typically uses issuance protocol
+}
+
+// 🔄 Helper function to return error response in appropriate format
+function sendErrorResponse(res, errorMessage, statusCode = 400, isJSON = false) {
+    if (isJSON) {
+        // Return JSON error for HTTPWalletJSON
+        return res.status(statusCode).json({
+            success: false,
+            error: errorMessage
+        });
+    } else {
+        // Return BRC-103 binary error format
+        const responseWriter = new Utils.Writer();
+        responseWriter.writeUInt8(1); // Error code (1 = error)
+        const messageBytes = Utils.toArray(errorMessage, 'utf8');
+        responseWriter.writeUInt32LE(messageBytes.length); // Message length
+        responseWriter.write(messageBytes);
+        return res.status(statusCode).send(Buffer.from(responseWriter.toArray()));
+    }
+}
+
 export async function signCertificate(req, res) {
     console.log('=== Certificate signing request received ===');
     console.log('Request has BSV auth headers:', !!req.headers['x-bsv-auth-identity-key']);
@@ -42,23 +69,20 @@ export async function signCertificate(req, res) {
         // Body response from Metanet desktop walletclient
         const body = req.body;
         console.log('[signCertificate] Full request body:', JSON.stringify(body, null, 2));
-        const { clientNonce, type, fields, masterKeyring, acquisitionProtocol } = body;
+        const { clientNonce, type, fields, masterKeyring, acquisitionProtocol, subject: subjectFromBody } = body;
         
-        // Extract subject from BSV auth headers since we're not using auth middleware
-        const subject = req.headers['x-bsv-auth-identity-key'];
-        console.log('[signCertificate] Subject from headers:', subject);
-        console.log('[signCertificate] All headers:', JSON.stringify(req.headers, null, 2));
+        // Extract subject from BSV auth headers OR request body (for issuance protocol)
+        let subject = req.headers['x-bsv-auth-identity-key'] || subjectFromBody;
+        console.log('[signCertificate] Subject from headers:', req.headers['x-bsv-auth-identity-key']);
+        console.log('[signCertificate] Subject from body:', subjectFromBody);
+        console.log('[signCertificate] Using subject:', subject);
+        
+        // 🔄 Detect request type early for error handling
+        const isJSONRequest = isHTTPWalletJSONRequest(req, acquisitionProtocol);
         
         if (!subject) {
-            console.error('[signCertificate] No subject identity key found in headers');
-            // Return BRC-103 binary error format instead of JSON
-            const errorMessage = 'Missing identity key in request headers';
-            const responseWriter = new Utils.Writer();
-            responseWriter.writeUInt8(1); // Error code (1 = error)
-            const messageBytes = Utils.toArray(errorMessage, 'utf8');
-            responseWriter.writeUInt32LE(messageBytes.length); // Message length
-            responseWriter.write(messageBytes);
-            return res.status(400).send(Buffer.from(responseWriter.toArray()));
+            console.error('[signCertificate] No subject identity key found in headers or request body');
+            return sendErrorResponse(res, 'Missing identity key in request headers or body', 400, isJSONRequest);
         }
 
         // Get all wallet info
@@ -82,14 +106,7 @@ export async function signCertificate(req, res) {
             console.log('[signCertificate] Processing encrypted certificate with BSV SDK patterns');
             if (!masterKeyring || !clientNonce) {
                 console.error('[signCertificate] Encrypted certificate requires masterKeyring and clientNonce');
-                // Return BRC-103 binary error format instead of JSON
-                const errorMessage = 'Encrypted certificate requires masterKeyring and clientNonce';
-                const responseWriter = new Utils.Writer();
-                responseWriter.writeUInt8(1); // Error code (1 = error)
-                const messageBytes = Utils.toArray(errorMessage, 'utf8');
-                responseWriter.writeUInt32LE(messageBytes.length); // Message length
-                responseWriter.write(messageBytes);
-                return res.status(400).send(Buffer.from(responseWriter.toArray()));
+                return sendErrorResponse(res, 'Encrypted certificate requires masterKeyring and clientNonce', 400, isJSONRequest);
             }
             
             // Decrypt certificate fields using BSV SDK patterns
@@ -114,27 +131,13 @@ export async function signCertificate(req, res) {
             const valid = await verifyNonce(clientNonce, serverWallet, subject);
             if (!valid) {
                 console.log('Nonce verification failed for subject:', subject);
-                // Return BRC-103 binary error format instead of JSON
-                const errorMessage = 'Invalid client nonce - replay protection failed';
-                const responseWriter = new Utils.Writer();
-                responseWriter.writeUInt8(1); // Error code (1 = error)
-                const messageBytes = Utils.toArray(errorMessage, 'utf8');
-                responseWriter.writeUInt32LE(messageBytes.length); // Message length
-                responseWriter.write(messageBytes);
-                return res.status(400).send(Buffer.from(responseWriter.toArray()));
+                return sendErrorResponse(res, 'Invalid client nonce - replay protection failed', 400, isJSONRequest);
             }
             console.log('Client nonce verification passed');
             validatedClientNonce = clientNonce;
         } catch (nonceError) {
             console.error('Error during nonce verification:', nonceError);
-            // Return BRC-103 binary error format instead of JSON
-            const errorMessage = 'Nonce verification error: ' + nonceError.message;
-            const responseWriter = new Utils.Writer();
-            responseWriter.writeUInt8(1); // Error code (1 = error)
-            const messageBytes = Utils.toArray(errorMessage, 'utf8');
-            responseWriter.writeUInt32LE(messageBytes.length); // Message length
-            responseWriter.write(messageBytes);
-            return res.status(400).send(Buffer.from(responseWriter.toArray()));
+            return sendErrorResponse(res, 'Nonce verification error: ' + nonceError.message, 400, isJSONRequest);
         }
         serverNonce = await createNonce(serverWallet, subject);
 
@@ -194,7 +197,7 @@ export async function signCertificate(req, res) {
             subject,
             certifier,
             revocation.txid + '.0', // randomizeOutputs must be set to false
-            fields
+            decryptedFields
         );
 
         await signedCertificate.sign(serverWallet);
@@ -312,15 +315,63 @@ export async function signCertificate(req, res) {
         // CRITICAL: Check if certificate has signature
         console.log('CERT DEBUG - Has signature:', !!signedCertificate.signature);
         console.log('CERT DEBUG - Signature length:', signedCertificate.signature?.length);
+        console.log('CERT DEBUG - Signature type:', typeof signedCertificate.signature);
+        console.log('CERT DEBUG - Signature first 16 chars:', signedCertificate.signature?.toString().substring(0, 16));
         
-        // Return certificate in BRC-103 binary format for MetaNet Desktop acquireCertificate
-        console.log('Returning certificate in BRC-103 binary format for MetaNet Desktop...');
+        // 🔄 OPTION A: Detect request type and return appropriate response format
+        const isHTTPWalletJSONReq = isHTTPWalletJSONRequest(req, acquisitionProtocol);
         
-        // Set appropriate headers for binary response
-        res.setHeader('Content-Type', 'application/octet-stream');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Headers', '*');
-        res.setHeader('Access-Control-Allow-Methods', '*');
+        console.log('[RESPONSE FORMAT] Request detection:', {
+            contentType: req.headers['content-type'],
+            accept: req.headers['accept'],
+            userAgent: req.headers['user-agent'],
+            acquisitionProtocol: acquisitionProtocol,
+            isHTTPWalletJSONRequest: isHTTPWalletJSONReq
+        });
+        
+        if (isHTTPWalletJSONReq) {
+            // Return JSON format for HTTPWalletJSON compatibility
+            console.log('🔄 Returning certificate in JSON format for HTTPWalletJSON compatibility...');
+            
+            // Set JSON response headers
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Headers', '*');
+            res.setHeader('Access-Control-Allow-Methods', '*');
+            
+            // Create JSON response structure that HTTPWalletJSON expects
+            // HTTPWalletJSON expects the certificate fields directly in the response
+            const jsonResponse = {
+                type: signedCertificate.type,
+                serialNumber: signedCertificate.serialNumber,
+                subject: signedCertificate.subject,
+                certifier: signedCertificate.certifier,
+                revocationOutpoint: signedCertificate.revocationOutpoint,
+                fields: signedCertificate.fields,
+                signature: signedCertificate.signature
+            };
+            
+            console.log('[JSON RESPONSE] Returning certificate as JSON:', {
+                hasType: !!jsonResponse.type,
+                hasSerialNumber: !!jsonResponse.serialNumber,
+                hasSubject: !!jsonResponse.subject,
+                hasCertifier: !!jsonResponse.certifier,
+                hasFields: !!jsonResponse.fields,
+                hasSignature: !!jsonResponse.signature,
+                responseSize: JSON.stringify(jsonResponse).length
+            });
+            
+            return res.status(200).json(jsonResponse);
+        } else {
+            // Return binary format for MetaNet Desktop and other binary clients
+            console.log('🔄 Returning certificate in BRC-103 binary format for binary clients...');
+            
+            // Set appropriate headers for binary response
+            res.setHeader('Content-Type', 'application/octet-stream');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Headers', '*');
+            res.setHeader('Access-Control-Allow-Methods', '*');
+        }
         
         console.log('Converting certificate to binary format using BSV SDK');
         
@@ -396,13 +447,12 @@ export async function signCertificate(req, res) {
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
-        // Return BRC-103 binary error format instead of JSON
+        
+        // Detect request type for error response format
+        const { acquisitionProtocol } = req.body || {};
+        const isJSONRequest = isHTTPWalletJSONRequest(req, acquisitionProtocol);
         const errorMessage = error.message || 'Unknown certificate signing error';
-        const responseWriter = new Utils.Writer();
-        responseWriter.writeUInt8(1); // Error code (1 = error)
-        const messageBytes = Utils.toArray(errorMessage, 'utf8');
-        responseWriter.writeUInt32LE(messageBytes.length);
-        responseWriter.write(messageBytes);
-        return res.status(500).send(Buffer.from(responseWriter.toArray()));
+        
+        return sendErrorResponse(res, errorMessage, 500, isJSONRequest);
     }
 }
