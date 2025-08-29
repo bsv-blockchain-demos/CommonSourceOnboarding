@@ -78,26 +78,6 @@ const authMiddleware = createAuthMiddleware({
     console.log('[Auth] All certificates validated successfully');
   },
 
-  // Detect HTTPWalletJSON requests that need raw JSON responses
-  detectRawResponseNeeded: (req) => {
-    console.log(`[AUTH-CALLBACK] detectRawResponseNeeded called for path: ${req.path}`);
-    console.log(`[AUTH-CALLBACK] User-Agent: ${req.headers['user-agent']}`);
-    console.log(`[AUTH-CALLBACK] Accept: ${req.headers['accept']}`);
-    
-    const isCertRequest = req.path === '/signCertificate' || req.path === '/acquireCertificate';
-    const isJSONRequest = req.headers['accept']?.includes('application/json') || 
-                          req.headers['user-agent']?.includes('HTTPWalletJSON') ||
-                          req.body?.acquisitionProtocol === 'issuance';
-    
-    const needsRaw = isCertRequest && isJSONRequest;
-    console.log(`[AUTH-CALLBACK] isCertRequest: ${isCertRequest}, isJSONRequest: ${isJSONRequest}, needsRaw: ${needsRaw}`);
-    
-    if (needsRaw) {
-      console.log(`[AUTH] ✅ Detected HTTPWalletJSON certificate request - will return raw JSON response`);
-    }
-    
-    return needsRaw;
-  }
 })
 
 

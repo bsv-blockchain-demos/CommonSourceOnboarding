@@ -10,7 +10,7 @@ async function clearWallet() {
         console.log('Listing all certificates...');
         const certificatesResponse = await userWallet.listCertificates({
             certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-            types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+            types: [Utils.toBase64(Utils.toArray('Bvc', 'base64'))]
         });
         
         console.log('Found certificates response:', certificatesResponse);

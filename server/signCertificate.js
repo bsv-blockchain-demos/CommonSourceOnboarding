@@ -206,21 +206,8 @@ export async function signCertificate(req, res) {
 
         console.log("signedCertificate", signedCertificate);
 
-        // Save certificate in database
-        // EX: {subject: subject, certificate: signedCertificate}
-        // Temporarily comment out MongoDB operations to get server running
-        // await connectToMongo();
-
-        // Check for existing DID to enable identity continuity across certificate renewals
-        // const existingRecord = await usersCollection.findOne({ _id: subject });
+        // Certificate signed successfully
         let existingDid = null;
-        
-        // if (existingRecord) {
-        //     console.log('User has existing record, preserving DID for continuity:', subject);
-        //     // Preserve the existing DID for identity continuity
-        //     // This allows users to revoke and re-certify without creating a new identity
-        //     existingDid = existingRecord.did;
-        // }
         
         // Prepare document for database
         const documentToSave = { 
@@ -298,13 +285,7 @@ export async function signCertificate(req, res) {
             throw new Error('Document ID is null or undefined - cannot save certificate');
         }
         
-        // Temporarily comment out database save operation
-        // await usersCollection.updateOne({ _id: documentId }, 
-        //     { $set: documentToSave },
-        //     { upsert: true }
-        // );
-        
-        console.log(`Certificate would be saved for subject: ${documentId}, VC format: ${isVCCertificate}, DID format: ${isDIDCertificate} (MongoDB disabled temporarily)`);
+        console.log(`Certificate signed for subject: ${documentId}, VC format: ${isVCCertificate}, DID format: ${isDIDCertificate}`);
         
         // BSV SDK's acquireCertificate expects the certificate as a plain object
         // Need to serialize the Certificate properly

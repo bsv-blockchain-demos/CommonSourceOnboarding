@@ -9,7 +9,7 @@ export async function POST(req) {
         // List all certificates first
         const certificatesResponse = await userWallet.listCertificates({
             certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY],
-            types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+            types: [Utils.toBase64(Utils.toArray('BSV-Identity-VC', 'base64'))]
         });
         
         console.log('Found certificates response:', certificatesResponse);
@@ -20,7 +20,7 @@ export async function POST(req) {
         for (const cert of certificates) {
             try {
                 const result = await userWallet.relinquishCertificate({
-                    type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
+                    type: Utils.toBase64(Utils.toArray('BSV-Identity-VC', 'base64')),
                     serialNumber: cert.serialNumber,
                     certifier: process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4",
                 });

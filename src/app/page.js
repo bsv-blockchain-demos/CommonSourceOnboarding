@@ -68,12 +68,12 @@ async function resolveDIDFromCertificate(didId) {
     // List all certificates and filter for DID documents
     const certificates = await userWallet.listCertificates({
       certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-      types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+      types: [Utils.toBase64(Utils.toArray('Bvc', 'base64'))]
   });
     console.log('[DID Resolution] Found', certificates.length, 'total certificates');
     
     // Filter for CommonSource identity certificates that contain DID data (isDID field)
-    const commonSourceType = btoa("CommonSource user identity");
+    const commonSourceType = Utils.toBase64(Utils.toArray('Bvc', 'base64'));
     const didCertificates = certificates.filter(cert => 
       cert.type === commonSourceType && 
       cert.fields && 
@@ -198,7 +198,7 @@ async function resolveDIDFromCertificate(didId) {
           try {
             certificates = await userWallet.listCertificates({
               certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-              types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+              types: [Utils.toBase64(Utils.toArray('Bvc', 'base64'))]
           });
           } catch (listError) {
             console.warn('[Page] Failed to list certificates:', listError);
@@ -233,7 +233,7 @@ async function resolveDIDFromCertificate(didId) {
             }
           }
           
-          const identityType = btoa("CommonSource user identity");
+          const identityType = Utils.toBase64(Utils.toArray('Bvc', 'base64'));
           const identityCerts = certificateList.filter(cert => cert.type === identityType);
           
           if (identityCerts.length > 0) {
@@ -476,7 +476,7 @@ async function resolveDIDFromCertificate(didId) {
       }
       
       const certificateResult = await userWallet.acquireCertificate({
-        type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
+        type: Utils.toBase64(Utils.toArray('Bvc', 'base64')),
         certifier: serverPublicKey,
         fields: certificateFields,  // Your clean certificate fields
         certifierUrl: certifierUrl, // Required for issuance protocol
@@ -498,7 +498,7 @@ async function resolveDIDFromCertificate(didId) {
         console.log('[VC Cert] Checking if certificate is visible in MetaNet Desktop wallet...');
         const walletCerts = await userWallet.listCertificates({
           certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-          types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+          types: [Utils.toBase64(Utils.toArray('Bvc', 'base64'))]
         });
 
         let certificateList = Array.isArray(walletCerts) ? walletCerts : [];
@@ -738,7 +738,7 @@ async function resolveDIDFromCertificate(didId) {
       // In a real scenario, you'd pass a specific DID ID
       const certificates = await userWallet.listCertificates();
       // Filter for CommonSource identity certificates that contain DID data (isDID field)
-      const commonSourceType = btoa("CommonSource user identity");
+      const commonSourceType = Utils.toBase64(Utils.toArray('Bvc', 'base64'));
       const didCerts = certificates.filter(cert => 
         cert.type === commonSourceType && 
         cert.fields && 

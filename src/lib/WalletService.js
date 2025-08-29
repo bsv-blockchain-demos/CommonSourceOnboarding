@@ -67,7 +67,7 @@ class WalletService {
       for (const substrate of substrates) {
         try {
           console.log(`[WalletService] 🔄 Trying substrate: ${substrate.name}`);
-          wallet = new WalletClient(substrate.config, 'tauri://localhost');
+          wallet = new WalletClient(substrate.config, 'localhost');
           
           // Force connection to substrate
           console.log(`[WalletService] Connecting to substrate...`);

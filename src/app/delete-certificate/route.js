@@ -224,7 +224,7 @@ export async function POST(req) {
         const { walletService } = await import('../../lib/WalletService');
         const userWallet = await walletService.getWallet();
         const relinquishResponse = await userWallet.relinquishCertificate({
-            type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
+            type: Utils.toBase64(Utils.toArray('Bvc', 'base64')),
             serialNumber: certificate.serialNumber,
             certifier: process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4",
         });

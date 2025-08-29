@@ -12,7 +12,7 @@ import { WalletClient, Utils } from '@bsv/sdk';
  */
 
 const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
-const CERTIFICATE_TYPE = Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'));
+const CERTIFICATE_TYPE = Utils.toBase64(Utils.toArray('BSV-Identity-VC', 'base64'));
 
 export class UnifiedAuthService {
   constructor() {
