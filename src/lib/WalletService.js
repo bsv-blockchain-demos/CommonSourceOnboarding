@@ -67,8 +67,7 @@ class WalletService {
       for (const substrate of substrates) {
         try {
           console.log(`[WalletService] 🔄 Trying substrate: ${substrate.name}`);
-          // Use the certificate server URL for HTTP substrates
-          wallet = new WalletClient(substrate.config, 'localhost');
+          wallet = new WalletClient(substrate.config, 'tauri://localhost');
           
           // Force connection to substrate
           console.log(`[WalletService] Connecting to substrate...`);

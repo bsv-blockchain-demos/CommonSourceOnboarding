@@ -191,13 +191,15 @@ export async function signCertificate(req, res) {
 
 
         // Signing the new certificate
+        // IMPORTANT: Use original fields (encrypted if applicable), not decryptedFields
+        // The certificate should contain the original field format as sent by the client
         const signedCertificate = new Certificate(
             type,
             serialNumber,
             subject,
             certifier,
             revocation.txid + '.0', // randomizeOutputs must be set to false
-            decryptedFields
+            fields  // Use original fields, not decryptedFields
         );
 
         await signedCertificate.sign(serverWallet);
@@ -318,140 +320,42 @@ export async function signCertificate(req, res) {
         console.log('CERT DEBUG - Signature type:', typeof signedCertificate.signature);
         console.log('CERT DEBUG - Signature first 16 chars:', signedCertificate.signature?.toString().substring(0, 16));
         
-        // 🔄 OPTION A: Detect request type and return appropriate response format
-        const isHTTPWalletJSONReq = isHTTPWalletJSONRequest(req, acquisitionProtocol);
+        // Format response following bsva-certs pattern
+        // This works with the auth middleware's response wrapping
+        const protocolResponse = {
+            protocol: 'issuance',
+            certificate: signedCertificate,
+            serverNonce: serverNonce,
+            timestamp: new Date().toISOString(),
+            version: '1.0'
+        };
         
-        console.log('[RESPONSE FORMAT] Request detection:', {
-            contentType: req.headers['content-type'],
-            accept: req.headers['accept'],
-            userAgent: req.headers['user-agent'],
-            acquisitionProtocol: acquisitionProtocol,
-            isHTTPWalletJSONRequest: isHTTPWalletJSONReq
+        console.log('Returning certificate response with protocol wrapper:', {
+            hasProtocol: !!protocolResponse.protocol,
+            hasCertificate: !!protocolResponse.certificate,
+            hasServerNonce: !!protocolResponse.serverNonce,
+            hasTimestamp: !!protocolResponse.timestamp,
+            hasVersion: !!protocolResponse.version
         });
         
-        if (isHTTPWalletJSONReq) {
-            // Return JSON format for HTTPWalletJSON compatibility
-            console.log('🔄 Returning certificate in JSON format for HTTPWalletJSON compatibility...');
-            
-            // Set JSON response headers
-            res.setHeader('Content-Type', 'application/json');
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Headers', '*');
-            res.setHeader('Access-Control-Allow-Methods', '*');
-            
-            // Create JSON response structure that HTTPWalletJSON expects
-            // HTTPWalletJSON expects the certificate fields directly in the response
-            const jsonResponse = {
-                type: signedCertificate.type,
-                serialNumber: signedCertificate.serialNumber,
-                subject: signedCertificate.subject,
-                certifier: signedCertificate.certifier,
-                revocationOutpoint: signedCertificate.revocationOutpoint,
-                fields: signedCertificate.fields,
-                signature: signedCertificate.signature
-            };
-            
-            console.log('[JSON RESPONSE] Returning certificate as JSON:', {
-                hasType: !!jsonResponse.type,
-                hasSerialNumber: !!jsonResponse.serialNumber,
-                hasSubject: !!jsonResponse.subject,
-                hasCertifier: !!jsonResponse.certifier,
-                hasFields: !!jsonResponse.fields,
-                hasSignature: !!jsonResponse.signature,
-                responseSize: JSON.stringify(jsonResponse).length
-            });
-            
-            return res.status(200).json(jsonResponse);
-        } else {
-            // Return binary format for MetaNet Desktop and other binary clients
-            console.log('🔄 Returning certificate in BRC-103 binary format for binary clients...');
-            
-            // Set appropriate headers for binary response
-            res.setHeader('Content-Type', 'application/octet-stream');
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Headers', '*');
-            res.setHeader('Access-Control-Allow-Methods', '*');
-        }
-        
-        console.log('Converting certificate to binary format using BSV SDK');
-        
-        // COMPREHENSIVE VALIDATION: Check certificate is ready for binary conversion
-        if (!signedCertificate.signature) {
-            throw new Error('Certificate signature is missing - cannot convert to binary');
-        }
-        if (!signedCertificate.serialNumber || !signedCertificate.subject || !signedCertificate.certifier) {
-            throw new Error('Certificate missing required fields for binary conversion');
-        }
-        
-        console.log('VALIDATION: Certificate structure validated, proceeding with binary conversion');
-        console.log('CERT FIELDS:', {
-            type: !!signedCertificate.type,
-            serialNumber: !!signedCertificate.serialNumber, 
-            subject: !!signedCertificate.subject,
-            certifier: !!signedCertificate.certifier,
-            fields: !!signedCertificate.fields,
-            signature: !!signedCertificate.signature
-        });
-        
-        // Convert certificate to binary format using BSV SDK's toBinary method
-        let certBinary;
-        try {
-            certBinary = signedCertificate.toBinary();
-            console.log('BINARY CONVERSION: Success, certificate binary length:', certBinary.length);
-            
-            // Validate binary data
-            if (!certBinary || certBinary.length === 0) {
-                throw new Error('toBinary() returned empty or null data');
-            }
-            if (!(certBinary instanceof Uint8Array) && !Array.isArray(certBinary)) {
-                throw new Error('toBinary() returned non-array-like object: ' + typeof certBinary);
-            }
-            
-            console.log('BINARY VALIDATION: Binary data type:', Object.prototype.toString.call(certBinary));
-            console.log('BINARY VALIDATION: First 10 bytes:', Array.from(certBinary.slice(0, 10)));
-            console.log('BINARY VALIDATION: Last 10 bytes:', Array.from(certBinary.slice(-10)));
-            
-        } catch (binaryError) {
-            console.error('BINARY CONVERSION ERROR:', binaryError);
-            throw new Error(`Certificate toBinary() failed: ${binaryError.message}`);
-        }
-        
-        // TEST: Try returning certificate binary directly (without Utils.Writer wrapper)
-        // This tests if the issue is with our BRC-103 success byte prefix format
-        const USE_DIRECT_BINARY = process.env.USE_DIRECT_BINARY === 'true';
-        
-        if (USE_DIRECT_BINARY) {
-            console.log('ALTERNATIVE TEST: Returning certificate binary directly (no success byte)');
-            return res.status(200).send(Buffer.from(certBinary));
-        }
-        
-        // Return the binary certificate data as required by BRC-103 protocol
-        const responseWriter = new Utils.Writer();
-        responseWriter.writeUInt8(0); // Success code (0 = success)
-        responseWriter.write(certBinary);
-        const responseData = responseWriter.toArray();
-        
-        console.log('RESPONSE WRITER: Success, total response length:', responseData.length);
-        console.log('RESPONSE WRITER: Response data type:', Object.prototype.toString.call(responseData));
-        console.log('RESPONSE WRITER: First 5 bytes:', Array.from(responseData.slice(0, 5)));
-        
-        // ADDITIONAL TEST: Validate that responseData is array-like before sending
-        if (!responseData || responseData.length === 0) {
-            throw new Error('Utils.Writer.toArray() returned empty data');
-        }
-        if (!(responseData instanceof Uint8Array) && !Array.isArray(responseData)) {
-            throw new Error('Utils.Writer.toArray() returned non-array-like object: ' + typeof responseData);
-        }
-        
-        return res.status(200).send(Buffer.from(responseData));
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('X-Certificate-Protocol', 'issuance');
+        return res.json(protocolResponse);
     } catch (error) {
         console.error('Certificate signing error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
         
-        // Detect request type for error response format
+        // BRC-104 compliant error response format
         const { acquisitionProtocol } = req.body || {};
-        const isJSONRequest = isHTTPWalletJSONRequest(req, acquisitionProtocol);
+        const isJSONRequest = req.auth?.isHTTPWalletJSON || res.locals.needsRawJSON || isHTTPWalletJSONRequest(req, acquisitionProtocol);
         const errorMessage = error.message || 'Unknown certificate signing error';
+        
+        console.log('[ERROR] BRC-104 error response format:', {
+            isJSONRequest: isJSONRequest,
+            isHTTPWalletJSON: req.auth?.isHTTPWalletJSON,
+            needsRawJSON: res.locals.needsRawJSON,
+            errorMessage: errorMessage
+        });
         
         return sendErrorResponse(res, errorMessage, 500, isJSONRequest);
     }

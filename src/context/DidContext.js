@@ -40,7 +40,7 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
         console.log('[DidContext] Using BSV SDK wallet for certificate listing');
         certificates = await userWallet.listCertificates({
           certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-          types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+          types: [Utils.toBase64(Utils.toArray('CommonSourceUserIdentity', 'base64'))]
       });
       } catch (listError) {
         console.warn(`[DidContext] Failed to list certificates:`, listError);
@@ -94,7 +94,7 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
       console.log('[DidContext] Found', certificateList.length, 'total certificates');
       
       // Filter for CommonSource identity certificates that contain DID data (isDID field)
-      const commonSourceType = Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'));
+      const commonSourceType = Utils.toBase64(Utils.toArray('CommonSourceUserIdentity', 'base64'));
       const didCerts = certificateList.filter(cert => 
         cert.type === commonSourceType && 
         cert.fields && 
@@ -165,6 +165,7 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
         version: "1.0",
         created: didData.created || new Date().toISOString(),
         updated: new Date().toISOString(),
+        isVC: "false",
         isDID: "true"  // DID certificate identifier (similar to isVC for VC certificates)
       };
 
@@ -219,11 +220,13 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
       }
       
       const certificateResult = await userWallet.acquireCertificate({
-        type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
+        type: Utils.toBase64(Utils.toArray('CommonSourceUserIdentity', 'base64')),  // Fixed: Use consistent string and proper base64 encoding
         certifier: serverPublicKey,
-        acquisitionProtocol: "issuance",    // Let certificate server handle everything
+        acquisitionProtocol: "issuance",    
         fields: certificateFields,  // Your clean certificate fields
         certifierUrl: certifierUrl, // Required for issuance protocol
+        subject: subject,
+        clientNonce: clientNonce,  // Fixed: Include the generated client nonce
       });
       
       console.log('[DidContext] ✅ DID certificate acquired via BSV SDK issuance protocol:', {
@@ -242,7 +245,7 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
         
         const walletCerts = await userWallet.listCertificates({
           certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-          types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+          types: [Utils.toBase64(Utils.toArray('CommonSourceUserIdentity', 'base64'))]
         });
         let certificateList = Array.isArray(walletCerts) ? walletCerts : [];
         
@@ -515,7 +518,7 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
       }
 
       // Server DID - this should come from environment config
-      const serverDid = process.env.NEXT_PUBLIC_SERVER_DID || `did:bsv:${process.env.NEXT_PUBLIC_DID_TOPIC || 'tm_did'}:server`;
+      const serverDid = process.env.NEXT_PUBLIC_SERVER_DID || `did:bsv:${process.env.NEXT_PUBLIC_DID_TOPIC || 'bsvdid'}:server`;
 
       const vcData = vcService.createIdentityCredentialData({
         issuerDid: serverDid,

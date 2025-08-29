@@ -10,7 +10,7 @@ export class BsvDidService {
   constructor(walletClient, overlayServiceUrl = null) {
     this.walletClient = walletClient;
     this.overlayServiceUrl = overlayServiceUrl;
-    this.topic = process.env.NEXT_PUBLIC_DID_TOPIC || 'tm_did';
+    this.topic = process.env.NEXT_PUBLIC_DID_TOPIC || 'bsvdid';
     this.protocolId = 'CMSRC';
   }
 

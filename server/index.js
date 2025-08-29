@@ -52,7 +52,7 @@ const authMiddleware = createAuthMiddleware({
   allowUnauthenticated: true, // Allow unauthenticated for certificate issuance
   logger: console,
   logLevel: 'debug',
-  
+
   // Certificate validation callback for comprehensive verification
   onCertificatesReceived: async (certificates) => {
     console.log(`[Auth] Validating ${certificates.length} certificates...`);
@@ -76,8 +76,31 @@ const authMiddleware = createAuthMiddleware({
     }
     
     console.log('[Auth] All certificates validated successfully');
+  },
+
+  // Detect HTTPWalletJSON requests that need raw JSON responses
+  detectRawResponseNeeded: (req) => {
+    console.log(`[AUTH-CALLBACK] detectRawResponseNeeded called for path: ${req.path}`);
+    console.log(`[AUTH-CALLBACK] User-Agent: ${req.headers['user-agent']}`);
+    console.log(`[AUTH-CALLBACK] Accept: ${req.headers['accept']}`);
+    
+    const isCertRequest = req.path === '/signCertificate' || req.path === '/acquireCertificate';
+    const isJSONRequest = req.headers['accept']?.includes('application/json') || 
+                          req.headers['user-agent']?.includes('HTTPWalletJSON') ||
+                          req.body?.acquisitionProtocol === 'issuance';
+    
+    const needsRaw = isCertRequest && isJSONRequest;
+    console.log(`[AUTH-CALLBACK] isCertRequest: ${isCertRequest}, isJSONRequest: ${isJSONRequest}, needsRaw: ${needsRaw}`);
+    
+    if (needsRaw) {
+      console.log(`[AUTH] ✅ Detected HTTPWalletJSON certificate request - will return raw JSON response`);
+    }
+    
+    return needsRaw;
   }
 })
+
+
 
 // 3. Create and configure the Express app
 const app = express();
@@ -95,54 +118,55 @@ app.use((req, res, next) => {
     }
   })
 
-app.use(bodyParser.json())
 
-// Add BRC-104 HTTP transport discovery endpoint BEFORE auth middleware
-app.get('/.well-known/auth', (_req, res) => {
-  console.log('[AUTH] BRC-104 discovery endpoint accessed');
-  res.json({
-    identityKey: serverPublicKey,
-    services: {
-      certificateIssuance: {
-        endpoint: '/acquireCertificate',
-        protocol: 'BRC-103'
+  app.use(bodyParser.json())
+
+  // Add BRC-104 HTTP transport discovery endpoint BEFORE auth middleware
+  app.get('/.well-known/auth', (_req, res) => {
+    console.log('[AUTH] BRC-104 discovery endpoint accessed');
+    res.json({
+      identityKey: serverPublicKey,
+      services: {
+        certificateIssuance: {
+          endpoint: '/acquireCertificate',
+          protocol: 'BRC-103'
+        }
       }
-    }
+    });
   });
-});
 
-// 4. Apply the auth middleware to all routes EXCEPT /signCertificate
-app.use((req, res, next) => {
-  if (req.path === '/signCertificate') {
-    // Skip auth middleware for certificate signing - it's a public issuance endpoint
-    console.log(`[AUTH] Bypassing auth middleware for ${req.path}`);
+  // Apply auth middleware to all routes (following bsva-certs pattern)
+  app.use(authMiddleware);
+
+  
+  // Add detailed request logging middleware
+  app.use((req, _res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    
+    // Log all certificate-related requests in detail
+    if (req.path === '/signCertificate' || req.path === '/acquireCertificate') {
+      console.log(`[REQUEST] ${req.path} endpoint hit`);
+      console.log('[REQUEST] Headers:', JSON.stringify(req.headers, null, 2));
+      console.log('[REQUEST] Body preview:', JSON.stringify(req.body, null, 2));
+      console.log('[REQUEST] Request origin:', req.headers.host);
+      console.log('[REQUEST] User-Agent:', req.headers['user-agent']);
+      
+      // Check for BSV auth headers
+      const hasBsvAuth = req.headers['x-bsv-auth-identity-key'] || req.headers['x-bsv-auth-signature'];
+      console.log('[REQUEST] Has BSV auth headers:', !!hasBsvAuth);
+    }
+    
     next();
-  } else {
-    // Apply auth middleware to all other routes
-    authMiddleware(req, res, next);
+  });
+  
+  // 5. Define your routes as usual
+  app.post('/signCertificate', signCertificate)
+  app.post('/acquireCertificate', signCertificate)
+  
+  const port = process.env.PORT || 8080;
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`)
+  })
   }
-});
-
-// Add request logging middleware
-app.use((req, _res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  if (req.path === '/signCertificate') {
-    console.log('[REQUEST] signCertificate endpoint hit');
-    console.log('[REQUEST] Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('[REQUEST] Body preview:', JSON.stringify(req.body, null, 2));
-  }
-  next();
-});
-
-// 5. Define your routes as usual
-app.post('/signCertificate', signCertificate)
-// BSV SDK expects this endpoint name for acquireCertificate
-app.post('/acquireCertificate', signCertificate)
-
-const port = process.env.PORT || 8080;
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`)
-})
-}
 
 main()

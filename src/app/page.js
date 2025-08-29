@@ -18,11 +18,50 @@ import { Label } from "../components/ui/label";
 
 
 // Helper function to resolve DID from wallet certificates
-async function resolveDIDFromCertificate(wallet, didId) {
+
+
+export default function Home() {
+  
+  // Get wallet context
+  const { userWallet, userPubKey, certificate, setCertificate, initializeWallet } = useWallet();
+  
+  // Debug: Log wallet context to see what we're receiving
+  console.log('[Page] Wallet context received:', {
+    userWallet: !!userWallet,
+    userPubKey: !!userPubKey,
+    certificate: !!certificate
+  });
+  const [username, setUsername] = useState('');
+  const [residence, setResidence] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [email, setEmail] = useState('');
+  const [work, setWork] = useState('');
+  // Skip email verification for testing
+  const [emailVerified, setEmailVerified] = useState(true);
+  const [emailSent, setEmailSent] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [generated, setGenerated] = useState(false);
+  const [didCreated, setDidCreated] = useState(false);
+  const [existingDidFound, setExistingDidFound] = useState(false);
+  const [checkingDid, setCheckingDid] = useState(false);
+
+  const { createUserDid, createIdentityVCData, userDid, didService, checkWalletForDIDCertificates, resetInitializationFlag, debugStorageState } = useDidContext();
+  const { loginWithCertificate } = useAuthContext();
+
+  const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
+  
+  // Page-level initialization tracking to prevent infinite loops
+  const hasCheckedExisting = useRef(false);
+  const walletCheckAttempts = useRef(new Map()); // Track attempts by pubkey
+  const walletErrorCount = useRef(0);
+  const maxWalletErrors = 5; // Increased from 3 to 5 for legitimate operations
+
+async function resolveDIDFromCertificate(didId) {
   try {
     console.log('[DID Resolution] Resolving DID from certificates:', didId);
     
-    if (!wallet) {
+    if (!userWallet) {
       throw new Error('Wallet not initialized');
     }
     
@@ -68,44 +107,6 @@ async function resolveDIDFromCertificate(wallet, didId) {
     throw new Error(`DID resolution failed: ${error.message}`);
   }
 }
-
-
-export default function Home() {
-  
-  // Get wallet context
-  const { userWallet, userPubKey, certificate, setCertificate, initializeWallet } = useWallet();
-  
-  // Debug: Log wallet context to see what we're receiving
-  console.log('[Page] Wallet context received:', {
-    userWallet: !!userWallet,
-    userPubKey: !!userPubKey,
-    certificate: !!certificate
-  });
-  const [username, setUsername] = useState('');
-  const [residence, setResidence] = useState('');
-  const [age, setAge] = useState('');
-  const [gender, setGender] = useState('');
-  const [email, setEmail] = useState('');
-  const [work, setWork] = useState('');
-  // Skip email verification for testing
-  const [emailVerified, setEmailVerified] = useState(true);
-  const [emailSent, setEmailSent] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [generated, setGenerated] = useState(false);
-  const [didCreated, setDidCreated] = useState(false);
-  const [existingDidFound, setExistingDidFound] = useState(false);
-  const [checkingDid, setCheckingDid] = useState(false);
-
-  const { createUserDid, createIdentityVCData, userDid, didService, checkWalletForDIDCertificates, resetInitializationFlag, debugStorageState } = useDidContext();
-  const { loginWithCertificate } = useAuthContext();
-
-  const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
-  
-  // Page-level initialization tracking to prevent infinite loops
-  const hasCheckedExisting = useRef(false);
-  const walletCheckAttempts = useRef(new Map()); // Track attempts by pubkey
-  const walletErrorCount = useRef(0);
-  const maxWalletErrors = 5; // Increased from 3 to 5 for legitimate operations
 
   // Check for existing DID when wallet is connected (with circuit breaker)
   const checkExistingCertificate = useCallback(async (publicKey) => {
@@ -309,15 +310,13 @@ export default function Home() {
         return;
       }
       
-      const wallet = userWallet;
-      
       // Log the user's identity key to help with funding
-      const identityKey = await wallet.getPublicKey({ identityKey: true });
+      const identityKey = await userWallet.getPublicKey({ identityKey: true });
       console.log('User wallet identity key (needs funding):', identityKey);
       
       // Check wallet balance
       try {
-        const balance = await wallet.getBalance();
+        const balance = await userWallet.getBalance();
         console.log('User wallet balance:', balance, 'satoshis');
         if (balance < 10) {
           toast.error(`Insufficient funds in wallet. Balance: ${balance} satoshis. Please fund your wallet.`);
@@ -372,8 +371,6 @@ export default function Home() {
         return;
       }
       
-      const wallet = userWallet;
-
       // Create VC data structure for certificate
       console.log('Creating VC data structure...');
       let vcData = null;
@@ -449,7 +446,7 @@ export default function Home() {
       let subject;
       try {
         console.log('[VC Cert] Getting public key from wallet');
-        const { publicKey } = await wallet.getPublicKey({ identityKey: true });
+        const { publicKey } = await userWallet.getPublicKey({ identityKey: true });
         subject = publicKey;
       } catch (error) {
         console.warn('[VC Cert] Failed to get public key from wallet, using userPubKey from context:', error);
@@ -471,14 +468,14 @@ export default function Home() {
       let clientNonce;
       try {
         // Create nonce using user wallet for the server public key
-        clientNonce = await createNonce(wallet, serverPublicKey);
+        clientNonce = await createNonce(userWallet, serverPublicKey);
         console.log('[VC Cert] Client nonce generated:', clientNonce?.substring(0, 16) + '...');
       } catch (nonceError) {
         console.error('[VC Cert] Failed to generate client nonce:', nonceError);
         throw new Error('Failed to generate client nonce for certificate request');
       }
       
-      const certificateResult = await wallet.acquireCertificate({
+      const certificateResult = await userWallet.acquireCertificate({
         type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
         certifier: serverPublicKey,
         fields: certificateFields,  // Your clean certificate fields
@@ -499,8 +496,11 @@ export default function Home() {
       try {
         // Verify certificate was stored by checking the main wallet
         console.log('[VC Cert] Checking if certificate is visible in MetaNet Desktop wallet...');
-        
-        const walletCerts = await wallet.listCertificates();
+        const walletCerts = await userWallet.listCertificates({
+          certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
+          types: [Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8'))]
+        });
+
         let certificateList = Array.isArray(walletCerts) ? walletCerts : [];
         
         // Handle different response formats
