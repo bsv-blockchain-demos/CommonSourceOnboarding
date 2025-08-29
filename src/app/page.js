@@ -896,7 +896,7 @@ export default function Home() {
               
               <div className="space-y-3 pt-4">
                 {/* Conditional Create DID Button Visibility */}
-                {(!hasBdidCert && !autoGeneratingDid && (autoGenerationFailed || checkingDid === false)) && (
+                {(!hasBdidCert && !didCreated && !autoGeneratingDid && (autoGenerationFailed || checkingDid === false)) && (
                   <Button
                     onClick={handleCreateDid}
                     disabled={didCreated || checkingDid}
