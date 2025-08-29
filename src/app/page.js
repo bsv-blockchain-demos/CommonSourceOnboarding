@@ -44,7 +44,7 @@ export default function Home() {
   const [existingDidFound, setExistingDidFound] = useState(false);
   const [checkingDid, setCheckingDid] = useState(false);
 
-  const { createUserDid, createIdentityVCData, userDid, checkWalletForDIDCertificates, resetInitializationFlag } = useDidContext();
+  const { createUserDid, createIdentityVCData, userDid, resetInitializationFlag } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
@@ -55,7 +55,89 @@ export default function Home() {
   const walletErrorCount = useRef(0);
   const maxWalletErrors = 5; // Increased from 3 to 5 for legitimate operations
 
-  // Check for existing DID when wallet is connected (with circuit breaker)
+  // Comprehensive certificate detection function - checks for both Bdid and Bvc certificates
+  const checkAllCertificates = useCallback(async (wallet) => {
+    if (!wallet) {
+      console.log('[CertDetection] No wallet available');
+      return { hasBdidCert: false, hasBvcCert: false, certificates: [], bdidCertificates: [], bvcCertificates: [] };
+    }
+
+    try {
+      console.log('[CertDetection] Starting comprehensive certificate detection...');
+      
+      const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4";
+      
+      // Get all certificates from the server
+      let allCertificates;
+      try {
+        allCertificates = await wallet.listCertificates({
+          certifiers: [serverPubKey],
+          types: [Utils.toBase64(Utils.toArray('Bdid', 'base64')), Utils.toBase64(Utils.toArray('Bvc', 'base64'))]
+      });
+      } catch (listError) {
+        console.warn('[CertDetection] Failed to list certificates:', listError);
+        if (listError.message && listError.message.includes('JSON Parse error')) {
+          console.log('[CertDetection] Wallet appears empty - treating as no certificates');
+          return { hasBdidCert: false, hasBvcCert: false, certificates: [], bdidCertificates: [], bvcCertificates: [] };
+        }
+        throw listError;
+      }
+
+      // Handle different response formats
+      let certificateList = allCertificates;
+      if (typeof allCertificates === 'string') {
+        try {
+          certificateList = JSON.parse(allCertificates);
+        } catch (parseError) {
+          console.warn('[CertDetection] Failed to parse certificate response:', parseError);
+          return { hasBdidCert: false, hasBvcCert: false, certificates: [], bdidCertificates: [], bvcCertificates: [] };
+        }
+      }
+
+      if (!Array.isArray(certificateList)) {
+        if (certificateList && certificateList.certificates && Array.isArray(certificateList.certificates)) {
+          certificateList = certificateList.certificates;
+        } else {
+          console.log('[CertDetection] Certificate response is not an array:', typeof certificateList);
+          return { hasBdidCert: false, hasBvcCert: false, certificates: [], bdidCertificates: [], bvcCertificates: [] };
+        }
+      }
+
+      console.log(`[CertDetection] Found ${certificateList.length} total certificates from server`);
+
+      // Define certificate types
+      const bdidType = Utils.toBase64(Utils.toArray('Bdid', 'base64'));
+      const bvcType = Utils.toBase64(Utils.toArray('Bvc', 'base64'));
+
+      // Filter certificates by type
+      const bdidCerts = certificateList.filter(cert => cert.type === bdidType);
+      const bvcCerts = certificateList.filter(cert => cert.type === bvcType);
+
+      console.log(`[CertDetection] Found ${bdidCerts.length} Bdid certificates and ${bvcCerts.length} Bvc certificates`);
+
+      const result = {
+        hasBdidCert: bdidCerts.length > 0,
+        hasBvcCert: bvcCerts.length > 0,
+        certificates: certificateList,
+        bdidCertificates: bdidCerts,
+        bvcCertificates: bvcCerts
+      };
+
+      console.log('[CertDetection] Detection complete:', {
+        hasBdidCert: result.hasBdidCert,
+        hasBvcCert: result.hasBvcCert,
+        totalCerts: certificateList.length
+      });
+
+      return result;
+
+    } catch (error) {
+      console.error('[CertDetection] Error during certificate detection:', error);
+      return { hasBdidCert: false, hasBvcCert: false, certificates: [], bdidCertificates: [], bvcCertificates: [], error: error.message };
+    }
+  }, [userWallet]);
+
+  // Simplified certificate detection using comprehensive function
   const checkExistingCertificate = useCallback(async (publicKey) => {
     if (!publicKey || checkingDid) return;
     
@@ -84,7 +166,7 @@ export default function Home() {
     
     setCheckingDid(true);
     try {
-      console.log('[Page] Checking for existing certificates and DIDs for user:', publicKey);
+      console.log('[Page] Starting comprehensive certificate check for user:', publicKey);
       
       // Check if user already has a certificate loaded in context
       if (certificate) {
@@ -108,113 +190,60 @@ export default function Home() {
         return;
       }
       
-      // Check wallet for DID certificates using DidContext function
-      if (userWallet && checkWalletForDIDCertificates) {
-        try {
-          console.log('[Page] Checking wallet for DID certificates...');
-          const didCertResult = await checkWalletForDIDCertificates();
-          
-          if (didCertResult) {
-            console.log('[Page] ✅ Found existing DID certificate:', didCertResult.did);
-            setExistingDidFound(true);
-            setDidCreated(true);
-            // Reset error counts on success
-            walletErrorCount.current = 0;
-            walletCheckAttempts.current.delete(attemptKey);
-            return;
-          }
-        } catch (didError) {
-          console.warn('[Page] Error checking DID certificates:', didError);
-          // Don't count JSON parse errors (empty wallet) as real errors
-          if (didError.message && didError.message.includes('JSON Parse error')) {
-            console.log('[Page] Wallet appears empty (JSON parse error) - not counting as error');
-          } else {
-            // Only count real network/server errors
-            walletErrorCount.current++;
-            console.log(`[Page] Network error count: ${walletErrorCount.current}/${maxWalletErrors}`);
-          }
+      // Use comprehensive certificate detection
+      const certStatus = await checkAllCertificates(userWallet);
+      
+      if (certStatus.error) {
+        console.warn('[Page] Error during certificate detection:', certStatus.error);
+        if (certStatus.error.includes('JSON Parse error')) {
+          console.log('[Page] Wallet appears empty - not counting as error');
+        } else {
+          walletErrorCount.current++;
+          console.log(`[Page] Network error count: ${walletErrorCount.current}/${maxWalletErrors}`);
         }
       }
       
-      // Check wallet for identity certificates
-      if (userWallet) {
-        try {
-          console.log('[Page] Checking wallet for identity certificates...');
-          
-          let certificates;
-          try {
-            certificates = await userWallet.listCertificates({
-              certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-              types: [Utils.toBase64(Utils.toArray('Bvc', 'base64'))]
-          });
-          } catch (listError) {
-            console.warn('[Page] Failed to list certificates:', listError);
-            if (listError.message && listError.message.includes('JSON Parse error')) {
-              console.log('[Page] Wallet appears to have no certificates (empty response) - not counting as error');
-              // Continue with empty array
-              certificates = [];
-            } else {
-              // Only count real network/server errors
-              walletErrorCount.current++;
-              console.log(`[Page] Network error count: ${walletErrorCount.current}/${maxWalletErrors}`);
-              throw listError;
-            }
-          }
-          
-          // Handle different response formats
-          let certificateList = certificates;
-          if (typeof certificates === 'string') {
-            try {
-              certificateList = JSON.parse(certificates);
-            } catch (parseError) {
-              console.warn('[Page] Failed to parse certificate response:', parseError);
-              certificateList = [];
-            }
-          }
-          
-          if (!Array.isArray(certificateList)) {
-            if (certificateList && certificateList.certificates && Array.isArray(certificateList.certificates)) {
-              certificateList = certificateList.certificates;
-            } else {
-              certificateList = [];
-            }
-          }
-          
-          const identityType = Utils.toBase64(Utils.toArray('Bvc', 'base64'));
-          const identityCerts = certificateList.filter(cert => cert.type === identityType);
-          
-          if (identityCerts.length > 0) {
-            console.log('[Page] ✅ Found existing identity certificates:', identityCerts.length);
-            setExistingDidFound(true);
-            setDidCreated(true);
-            // Reset error counts on success
-            walletErrorCount.current = 0;
-            walletCheckAttempts.current.delete(attemptKey);
-            return;
-          }
-        } catch (certError) {
-          console.error('[Page] Error checking identity certificates:', certError);
-        }
-      }
+      console.log('[Page] Certificate status:', {
+        hasBdidCert: certStatus.hasBdidCert,
+        hasBvcCert: certStatus.hasBvcCert,
+        totalCerts: certStatus.certificates?.length || 0
+      });
       
-      // No existing certificates or DIDs found
-      console.log('[Page] No existing certificates or DIDs found - user can create new ones');
-      setExistingDidFound(false);
-      setDidCreated(false);
-      // Reset attempt tracking on completion (success or no results)
-      walletCheckAttempts.current.delete(attemptKey);
+      // Update state based on certificate detection
+      if (certStatus.hasBdidCert || certStatus.hasBvcCert) {
+        console.log('[Page] ✅ Found existing certificates - DID:', certStatus.hasBdidCert, 'Identity:', certStatus.hasBvcCert);
+        setExistingDidFound(true);
+        setDidCreated(certStatus.hasBdidCert); // Only set didCreated if we have a DID cert
+        
+        // If we have a Bvc certificate, set it in the context for immediate login
+        if (certStatus.hasBvcCert && certStatus.bvcCertificates?.length > 0) {
+          const firstBvcCert = certStatus.bvcCertificates[0];
+          console.log('[Page] Setting first Bvc certificate in context for login:', firstBvcCert.serialNumber?.substring(0, 8) + '...');
+          setCertificate(firstBvcCert);
+        }
+        
+        // Reset error counts on success
+        walletErrorCount.current = 0;
+        walletCheckAttempts.current.delete(attemptKey);
+      } else {
+        console.log('[Page] No existing certificates found - user can create new ones');
+        setExistingDidFound(false);
+        setDidCreated(false);
+        // Reset attempt tracking on completion (success or no results)
+        walletCheckAttempts.current.delete(attemptKey);
+      }
       
     } catch (error) {
       console.error('[Page] Error checking existing certificates:', error);
     } finally {
       setCheckingDid(false);
     }
-  }, [checkingDid, certificate, userDid, userWallet, checkWalletForDIDCertificates]);
+  }, [checkingDid, certificate, userDid, userWallet, checkAllCertificates, setCertificate]);
 
   // Check for existing certificate when wallet connects (with loop prevention)
   useEffect(() => {
-    // Only check if we have pubkey, no certificate, and haven't already checked for this combination
-    if (userPubKey && !certificate && !existingDidFound && !checkingDid && !hasCheckedExisting.current) {
+    // Only check if we have wallet, pubkey, no certificate, and haven't already checked for this combination
+    if (userWallet && userPubKey && !certificate && !existingDidFound && !checkingDid && !hasCheckedExisting.current) {
       console.log('[Page] Wallet connected, initializing certificate check for user:', userPubKey);
       hasCheckedExisting.current = true;
       
@@ -231,7 +260,7 @@ export default function Home() {
           // Don't reset hasCheckedExisting on error - prevent retry loops
         });
     }
-  }, [userPubKey, certificate, existingDidFound, checkingDid, checkExistingCertificate]);
+  }, [userWallet, userPubKey, certificate, existingDidFound, checkingDid, checkExistingCertificate]);
   
   // Reset page-level tracking function
   const resetPageTracking = useCallback(() => {
@@ -281,6 +310,19 @@ export default function Home() {
       // Reset tracking flags to allow re-discovery of the newly created DID
       resetInitializationFlag();
       resetPageTracking();
+      
+      // Trigger certificate detection to update UI state
+      try {
+        console.log('[Page] Triggering certificate detection after DID creation...');
+        const certStatus = await checkAllCertificates(userWallet);
+        if (certStatus.hasBdidCert) {
+          console.log('[Page] ✅ DID certificate detected after creation');
+          setExistingDidFound(true);
+          setDidCreated(true);
+        }
+      } catch (detectionError) {
+        console.warn('[Page] Certificate detection failed after DID creation:', detectionError);
+      }
       
       toast.success('DID created successfully');
       setDidCreated(true);
@@ -579,6 +621,18 @@ export default function Home() {
       
       // Set the real certificate in wallet context to trigger state update
       setCertificate(certResponse);
+      
+      // Also trigger certificate detection to update state
+      try {
+        console.log('[Page] Triggering certificate detection after certificate generation...');
+        const certStatus = await checkAllCertificates(userWallet);
+        console.log('[Page] Certificate detection after generation:', {
+          hasBdidCert: certStatus.hasBdidCert,
+          hasBvcCert: certStatus.hasBvcCert
+        });
+      } catch (detectionError) {
+        console.warn('[Page] Certificate detection failed after generation:', detectionError);
+      }
       
       toast.success('Identity certificate generated successfully');
       setGenerated(true);

@@ -40,7 +40,7 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
         console.log('[DidContext] Using BSV SDK wallet for certificate listing');
         certificates = await userWallet.listCertificates({
           certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-          types: [Utils.toBase64(Utils.toArray('Bdid', 'utf8'))]
+          types: [Utils.toBase64(Utils.toArray('Bdid', 'base64'))]
       });
       } catch (listError) {
         console.warn(`[DidContext] Failed to list certificates:`, listError);
@@ -94,7 +94,7 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
       console.log('[DidContext] Found', certificateList.length, 'total certificates');
       
       // Filter for CommonSource identity certificates that contain DID data (isDID field)
-      const commonSourceType = Utils.toBase64(Utils.toArray('Bdid', 'utf8'));
+      const commonSourceType = Utils.toBase64(Utils.toArray('Bdid', 'base64'));
       const didCerts = certificateList.filter(cert => 
         cert.type === commonSourceType && 
         cert.fields && 
@@ -245,7 +245,7 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
         
         const walletCerts = await userWallet.listCertificates({
           certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-          types: [Utils.toBase64(Utils.toArray('Bdid', 'utf8'))]
+          types: [Utils.toBase64(Utils.toArray('Bdid', 'base64'))]
         });
         let certificateList = Array.isArray(walletCerts) ? walletCerts : [];
         
@@ -626,7 +626,10 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
     // Check wallet certificates
     if (userWallet) {
       try {
-        const allCerts = await userWallet.listCertificates();
+        const allCerts = await userWallet.listCertificates({
+          certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
+          types: [Utils.toBase64(Utils.toArray('Bdid', 'base64')), Utils.toBase64(Utils.toArray('Bvc', 'base64'))]
+      });
         console.log('[DidContext] Total wallet certificates:', Array.isArray(allCerts) ? allCerts.length : 'Response not array');
         
         const didDocumentType = Utils.toBase64(Utils.toArray('DID Document', 'utf8'));
