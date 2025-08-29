@@ -4,6 +4,14 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
 import { Utils, createNonce } from "@bsv/sdk";
 import { useDidContext } from "../context/DidContext";
+import { 
+  countries, 
+  getCountryByCode, 
+  getProvincesForCountry, 
+  calculateAge, 
+  formatBirthdate, 
+  validateBirthdate 
+} from "../lib/geographicData";
 import { toast } from 'react-hot-toast';
 import { useAuthContext } from "../context/authContext";
 import { useWallet } from "../components/WalletWrapper";
@@ -12,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 // Use the EXACT working pattern from pre-Vercel commit a337e5a
 // This was the last known working certificate acquisition approach
@@ -30,12 +39,20 @@ export default function Home() {
     userPubKey: !!userPubKey,
     certificate: !!certificate
   });
-  const [username, setUsername] = useState('');
-  const [residence, setResidence] = useState('');
-  const [age, setAge] = useState('');
+  // User identity fields
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [birthdate, setBirthdate] = useState('');
   const [gender, setGender] = useState('');
   const [email, setEmail] = useState('');
-  const [work, setWork] = useState('');
+  const [occupation, setOccupation] = useState('');
+  
+  // Address fields
+  const [country, setCountry] = useState('');
+  const [provinceState, setProvinceState] = useState('');
+  const [city, setCity] = useState('');
+  const [streetAddress, setStreetAddress] = useState('');
+  const [postalCode, setPostalCode] = useState('');
   const [emailVerified, setEmailVerified] = useState(true);
   const [emailSent, setEmailSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
@@ -58,6 +75,22 @@ export default function Home() {
   const walletCheckAttempts = useRef(new Map()); // Track attempts by pubkey
   const walletErrorCount = useRef(0);
   const maxWalletErrors = 5; // Increased from 3 to 5 for legitimate operations
+
+  // Geographic intelligence helpers
+  const selectedCountry = getCountryByCode(country);
+  const availableProvinces = getProvincesForCountry(country);
+  
+  // Handle birthdate formatting
+  const handleBirthdateChange = (value) => {
+    const formatted = formatBirthdate(value);
+    setBirthdate(formatted);
+  };
+  
+  // Handle country selection and reset dependent fields
+  const handleCountryChange = (value) => {
+    setCountry(value);
+    setProvinceState(''); // Reset province/state when country changes
+  };
 
   // Comprehensive certificate detection function - checks for both Bdid and Bvc certificates
   const checkAllCertificates = useCallback(async (wallet) => {
@@ -831,36 +864,47 @@ export default function Home() {
               {/* Only show form fields when user has DID certificate or auto-generation is complete */}
               {(hasBdidCert || didCreated) && (
                 <>
+                  {/* Personal Information Section */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">First Name</Label>
+                      <Input
+                        id="firstName"
+                        type="text"
+                        placeholder="Enter first name"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input
+                        id="lastName"
+                        type="text"
+                        placeholder="Enter last name"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  
                   <div className="space-y-2">
-                    <Label htmlFor="username">Username</Label>
+                    <Label htmlFor="birthdate">Birthdate</Label>
                     <Input
-                      id="username"
+                      id="birthdate"
                       type="text"
-                      placeholder="Enter your username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="DD/MM/YYYY"
+                      value={birthdate}
+                      onChange={(e) => handleBirthdateChange(e.target.value)}
+                      maxLength={10}
                     />
+                    {birthdate && validateBirthdate(birthdate) && (
+                      <p className="text-sm text-muted-foreground">
+                        Age: {calculateAge(birthdate)} years
+                      </p>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="residence">Residence</Label>
-                    <Input
-                      id="residence"
-                      type="text"
-                      placeholder="Enter your residence"
-                      value={residence}
-                      onChange={(e) => setResidence(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="age">Age</Label>
-                    <Input
-                      id="age"
-                      type="number"
-                      placeholder="Enter your age"
-                      value={age}
-                      onChange={(e) => setAge(e.target.value)}
-                    />
-                  </div>
+                  
                   <div className="space-y-2">
                     <Label htmlFor="gender">Gender</Label>
                     <Input
@@ -871,6 +915,7 @@ export default function Home() {
                       onChange={(e) => setGender(e.target.value)}
                     />
                   </div>
+                  
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -881,15 +926,88 @@ export default function Home() {
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </div>
+                  
                   <div className="space-y-2">
-                    <Label htmlFor="work">Work</Label>
+                    <Label htmlFor="occupation">Occupation</Label>
                     <Input
-                      id="work"
+                      id="occupation"
                       type="text"
-                      placeholder="Enter your work/occupation"
-                      value={work}
-                      onChange={(e) => setWork(e.target.value)}
+                      placeholder="Enter your occupation"
+                      value={occupation}
+                      onChange={(e) => setOccupation(e.target.value)}
                     />
+                  </div>
+                  
+                  {/* Address Section */}
+                  <div className="pt-4 border-t">
+                    <h3 className="text-lg font-medium mb-4">Address Information</h3>
+                    
+                    <div className="space-y-2 mb-4">
+                      <Label htmlFor="country">Country</Label>
+                      <Select value={country} onValueChange={handleCountryChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your country" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {countries.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {selectedCountry?.hasProvinces && (
+                      <div className="space-y-2 mb-4">
+                        <Label htmlFor="provinceState">{selectedCountry.regionLabel || 'Region'}</Label>
+                        <Select value={provinceState} onValueChange={setProvinceState}>
+                          <SelectTrigger>
+                            <SelectValue placeholder={`Select your ${(selectedCountry.regionLabel || 'region').toLowerCase()}`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableProvinces.map((p) => (
+                              <SelectItem key={p.code} value={p.code}>
+                                {p.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-2 mb-4">
+                      <Label htmlFor="city">City</Label>
+                      <Input
+                        id="city"
+                        type="text"
+                        placeholder="Enter your city"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2 mb-4">
+                      <Label htmlFor="streetAddress">Street Address</Label>
+                      <Input
+                        id="streetAddress"
+                        type="text"
+                        placeholder="Enter your street address"
+                        value={streetAddress}
+                        onChange={(e) => setStreetAddress(e.target.value)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="postalCode">{selectedCountry?.postalLabel || 'Postal Code'}</Label>
+                      <Input
+                        id="postalCode"
+                        type="text"
+                        placeholder={`Enter your ${(selectedCountry?.postalLabel || 'postal code').toLowerCase()}`}
+                        value={postalCode}
+                        onChange={(e) => setPostalCode(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </>
               )}
