@@ -660,9 +660,11 @@ export default function Home() {
       const certificateResult = await userWallet.acquireCertificate({
         type: Utils.toBase64(Utils.toArray('Bvc', 'base64')),
         certifier: serverPublicKey,
+        acquisitionProtocol: "issuance",    
         fields: certificateFields,  // Your clean certificate fields
         certifierUrl: certifierUrl, // Required for issuance protocol
-        acquisitionProtocol: "issuance"    // Let certificate server handle everything
+        subject: subject,           // CRITICAL: Include subject public key (was missing)
+        clientNonce: clientNonce,   // CRITICAL: Include generated client nonce (was missing)
       });
       
       console.log('[VC Cert] ✅ VC certificate acquired via BSV SDK issuance protocol:', {

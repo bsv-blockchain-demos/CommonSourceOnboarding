@@ -193,15 +193,15 @@ export async function signCertificate(req, res) {
 
 
         // Signing the new certificate
-        // IMPORTANT: For unencrypted certificates, use decryptedFields to ensure all processed fields are included
-        // For encrypted certificates, this would be the same as fields after decryption
+        // IMPORTANT: Use original fields (encrypted if applicable), not decryptedFields
+        // The certificate should contain the original field format as sent by the client
         const signedCertificate = new Certificate(
             type,
             serialNumber,
             subject,
             certifier,
             revocation.txid + '.0', // randomizeOutputs must be set to false
-            decryptedFields  // Use processed fields to ensure age calculation and other processed data is included
+            fields  // Use original fields, not decryptedFields
         );
 
         await signedCertificate.sign(serverWallet);
