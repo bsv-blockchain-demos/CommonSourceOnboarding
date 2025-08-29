@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { sendEmailFunc, verifyCode } from "../hooks/emailVerification";
-import { Utils, createNonce, Certificate } from "@bsv/sdk";
+import { Utils, createNonce } from "@bsv/sdk";
 import { useDidContext } from "../context/DidContext";
 import { toast } from 'react-hot-toast';
 import { useAuthContext } from "../context/authContext";
@@ -25,7 +25,6 @@ export default function Home() {
   // Get wallet context
   const { userWallet, userPubKey, certificate, setCertificate, initializeWallet } = useWallet();
   
-  // Debug: Log wallet context to see what we're receiving
   console.log('[Page] Wallet context received:', {
     userWallet: !!userWallet,
     userPubKey: !!userPubKey,
@@ -37,7 +36,6 @@ export default function Home() {
   const [gender, setGender] = useState('');
   const [email, setEmail] = useState('');
   const [work, setWork] = useState('');
-  // Skip email verification for testing
   const [emailVerified, setEmailVerified] = useState(true);
   const [emailSent, setEmailSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
@@ -46,7 +44,7 @@ export default function Home() {
   const [existingDidFound, setExistingDidFound] = useState(false);
   const [checkingDid, setCheckingDid] = useState(false);
 
-  const { createUserDid, createIdentityVCData, userDid, didService, checkWalletForDIDCertificates, resetInitializationFlag, debugStorageState } = useDidContext();
+  const { createUserDid, createIdentityVCData, userDid, checkWalletForDIDCertificates, resetInitializationFlag } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
 
   const serverPubKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY;
@@ -56,57 +54,6 @@ export default function Home() {
   const walletCheckAttempts = useRef(new Map()); // Track attempts by pubkey
   const walletErrorCount = useRef(0);
   const maxWalletErrors = 5; // Increased from 3 to 5 for legitimate operations
-
-async function resolveDIDFromCertificate(didId) {
-  try {
-    console.log('[DID Resolution] Resolving DID from certificates:', didId);
-    
-    if (!userWallet) {
-      throw new Error('Wallet not initialized');
-    }
-    
-    // List all certificates and filter for DID documents
-    const certificates = await userWallet.listCertificates({
-      certifiers: [process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4"],
-      types: [Utils.toBase64(Utils.toArray('Bvc', 'base64'))]
-  });
-    console.log('[DID Resolution] Found', certificates.length, 'total certificates');
-    
-    // Filter for CommonSource identity certificates that contain DID data (isDID field)
-    const commonSourceType = Utils.toBase64(Utils.toArray('Bvc', 'base64'));
-    const didCertificates = certificates.filter(cert => 
-      cert.type === commonSourceType && 
-      cert.fields && 
-      cert.fields.isDID === 'true'
-    );
-    
-    console.log('[DID Resolution] Found', didCertificates.length, 'DID certificates (CommonSource identity type with isDID=true)');
-    
-    // Find certificate with matching DID
-    const matchingCert = didCertificates.find(cert => 
-      cert.fields && cert.fields.didId === didId
-    );
-    
-    if (matchingCert) {
-      console.log('[DID Resolution] Found matching certificate for DID:', didId);
-      const didDocument = JSON.parse(matchingCert.fields.didDocument);
-      
-      console.log('[DID Resolution] ✅ DID resolved successfully');
-      return {
-        didDocument,
-        certificate: matchingCert,
-        found: true
-      };
-    }
-    
-    console.log('[DID Resolution] ⚠️ No certificate found for DID:', didId);
-    return { found: false };
-    
-  } catch (error) {
-    console.error('[DID Resolution] Error resolving DID from certificate:', error);
-    throw new Error(`DID resolution failed: ${error.message}`);
-  }
-}
 
   // Check for existing DID when wallet is connected (with circuit breaker)
   const checkExistingCertificate = useCallback(async (publicKey) => {
@@ -326,19 +273,6 @@ async function resolveDIDFromCertificate(didId) {
         console.log('Could not check balance:', balanceError);
       }
       
-      // // In production check the db if the user is verified before proceeding
-      // const res = await fetch('/emailVerify', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({ email, type: 'check-verified' }),
-      // });
-      // const jsonRes = await res.json();
-      // if (!jsonRes.verificationStatus) {
-      //   toast.error(jsonRes.message);
-      //   return;
-      // }
 
       // Step 1: Create user DID first
       console.log('Creating user DID...');
@@ -698,109 +632,6 @@ async function resolveDIDFromCertificate(didId) {
     await loginWithCertificate();
   }
 
-  // Test handler for DID document certificate storage
-  const handleTestDidCertificate = async () => {
-    try {
-      if (!userWallet) {
-        toast.error('Please connect wallet first');
-        return;
-      }
-
-      if (!didService) {
-        toast.error('DID service not initialized');
-        return;
-      }
-
-      toast.info('Testing DID document certificate storage...');
-      
-      const result = await testDidDocumentCertificate(userWallet, didService, serverPubKey);
-      
-      if (result.success) {
-        toast.success(`✅ DID Certificate Test PASSED! DID: ${result.didDocument.id}`);
-        console.log('[UI Test] DID Certificate stored with serial number:', result.serialNumber);
-      }
-      
-    } catch (error) {
-      console.error('[UI Test] DID Certificate test failed:', error);
-      toast.error(`❌ DID Certificate Test FAILED: ${error.message}`);
-    }
-  }
-
-  // Test handler for DID resolution from certificates
-  const handleTestDidResolution = async () => {
-    try {
-      if (!userWallet) {
-        toast.error('Please connect wallet first');
-        return;
-      }
-
-      // For testing, we'll try to resolve any existing DID
-      // In a real scenario, you'd pass a specific DID ID
-      const certificates = await userWallet.listCertificates();
-      // Filter for CommonSource identity certificates that contain DID data (isDID field)
-      const commonSourceType = Utils.toBase64(Utils.toArray('Bvc', 'base64'));
-      const didCerts = certificates.filter(cert => 
-        cert.type === commonSourceType && 
-        cert.fields && 
-        cert.fields.isDID === 'true'
-      );
-      
-      if (didCerts.length === 0) {
-        toast.info('No DID certificates found. Run DID Certificate Test first.');
-        return;
-      }
-
-      const testDid = didCerts[0].fields.didId;
-      toast.info(`Testing DID resolution for: ${testDid}`);
-      
-      const result = await resolveDIDFromCertificate(userWallet, testDid);
-      
-      if (result.found) {
-        toast.success(`✅ DID Resolution PASSED! Resolved: ${result.didDocument.id}`);
-        console.log('[UI Test] DID resolved successfully:', result.didDocument);
-      } else {
-        toast.warning('⚠️ DID not found in certificates');
-      }
-      
-    } catch (error) {
-      console.error('[UI Test] DID Resolution test failed:', error);
-      toast.error(`❌ DID Resolution Test FAILED: ${error.message}`);
-    }
-  }
-
-  // Clear certificates and localStorage
-  const handleClearStorage = async () => {
-    try {
-      if (!userWallet) {
-        toast.error('Please connect wallet first');
-        return;
-      }
-
-      console.log('[Clear] Clearing all storage...');
-      
-      // Clear browser localStorage
-      localStorage.clear();
-      console.log('[Clear] Browser localStorage cleared');
-      
-      // Clear userDid and related state
-      if (userPubKey) {
-        const storedDidKey = `user_did_${userPubKey}`;
-        localStorage.removeItem(storedDidKey);
-        console.log('[Clear] DID localStorage cleared for user:', userPubKey);
-      }
-      
-      // Reset page state
-      resetPageTracking();
-      resetInitializationFlag();
-      
-      toast.success('✅ Storage cleared! Refresh the page to start fresh.');
-      console.log('[Clear] ✅ All storage cleared successfully');
-      
-    } catch (error) {
-      console.error('[Clear] Error clearing storage:', error);
-      toast.error(`❌ Error clearing storage: ${error.message}`);
-    }
-  }
 
   if (generated && !certificate) {
     return (
@@ -924,45 +755,6 @@ async function resolveDIDFromCertificate(didId) {
                 >
                   Generate Certificate
                 </Button>
-                
-                {/* Test buttons for DID Document Certificate functionality */}
-                <div className="border-t pt-3 mt-4">
-                  <p className="text-sm text-muted-foreground text-center mb-3">DID Certificate Tests</p>
-                  <div className="space-y-2">
-                    <Button
-                      onClick={handleTestDidCertificate}
-                      disabled={!userWallet || !didService}
-                      variant="outline"
-                      className="w-full text-sm"
-                    >
-                      Test DID Certificate Storage
-                    </Button>
-                    <Button
-                      onClick={handleTestDidResolution}
-                      disabled={!userWallet}
-                      variant="outline"
-                      className="w-full text-sm"
-                    >
-                      Test DID Resolution
-                    </Button>
-                    <Button
-                      onClick={() => debugStorageState()}
-                      disabled={!userWallet}
-                      variant="outline"
-                      className="w-full text-sm"
-                    >
-                      Debug Storage State
-                    </Button>
-                    <Button
-                      onClick={handleClearStorage}
-                      disabled={!userWallet}
-                      variant="destructive"
-                      className="w-full text-sm"
-                    >
-                      Clear All Storage
-                    </Button>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
