@@ -119,6 +119,8 @@ export async function signCertificate(req, res) {
         }
 
         console.log('Fields processed, isVC:', decryptedFields?.isVC, 'isDID:', decryptedFields?.isDID);
+        console.log('DEBUG: Decrypted fields received by server:', decryptedFields);
+        console.log('DEBUG: Age field specifically:', { age: decryptedFields?.age, type: typeof decryptedFields?.age });
         
         // Check certificate types
         const isVCCertificate = decryptedFields && decryptedFields.isVC === 'true';
@@ -191,15 +193,15 @@ export async function signCertificate(req, res) {
 
 
         // Signing the new certificate
-        // IMPORTANT: Use original fields (encrypted if applicable), not decryptedFields
-        // The certificate should contain the original field format as sent by the client
+        // IMPORTANT: For unencrypted certificates, use decryptedFields to ensure all processed fields are included
+        // For encrypted certificates, this would be the same as fields after decryption
         const signedCertificate = new Certificate(
             type,
             serialNumber,
             subject,
             certifier,
             revocation.txid + '.0', // randomizeOutputs must be set to false
-            fields  // Use original fields, not decryptedFields
+            decryptedFields  // Use processed fields to ensure age calculation and other processed data is included
         );
 
         await signedCertificate.sign(serverWallet);
