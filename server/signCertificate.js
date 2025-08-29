@@ -233,7 +233,7 @@ export async function signCertificate(req, res) {
                 console.log('Reusing existing DID for identity continuity:', userDid);
             }
             
-            // Create the full VC structure to store in MongoDB
+            // Create the full VC structure to store in MongoDB with comprehensive fields
             const serverPubKeyHash = certifier.replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
             const fullVcData = {
                 '@context': ['https://www.w3.org/2018/credentials/v1'],
@@ -242,12 +242,23 @@ export async function signCertificate(req, res) {
                 issuanceDate: new Date().toISOString(),
                 credentialSubject: {
                     id: userDid,
-                    username: decryptedFields.username,
-                    email: decryptedFields.email,
-                    residence: decryptedFields.residence || '',
+                    // New comprehensive fields
+                    firstName: decryptedFields.firstName || '',
+                    lastName: decryptedFields.lastName || '',
+                    birthdate: decryptedFields.birthdate || '',
                     age: decryptedFields.age || '',
                     gender: decryptedFields.gender || '',
-                    work: decryptedFields.work || ''
+                    email: decryptedFields.email || '',
+                    occupation: decryptedFields.occupation || '',
+                    country: decryptedFields.country || '',
+                    provinceState: decryptedFields.provinceState || '',
+                    city: decryptedFields.city || '',
+                    streetAddress: decryptedFields.streetAddress || '',
+                    postalCode: decryptedFields.postalCode || '',
+                    // Legacy fields for backwards compatibility
+                    username: decryptedFields.username || `${decryptedFields.firstName || ''} ${decryptedFields.lastName || ''}`.trim(),
+                    residence: decryptedFields.residence || `${decryptedFields.city || ''}, ${decryptedFields.country || ''}`.replace(', ', ', ').trim(),
+                    work: decryptedFields.work || decryptedFields.occupation || ''
                 }
             };
             

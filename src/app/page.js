@@ -467,6 +467,69 @@ export default function Home() {
         return;
       }
       
+      // Validate all required fields
+      if (!firstName.trim()) {
+        toast.error('First name is required');
+        return;
+      }
+      if (!lastName.trim()) {
+        toast.error('Last name is required');
+        return;
+      }
+      if (!birthdate.trim() || !validateBirthdate(birthdate)) {
+        toast.error('Valid birthdate (DD/MM/YYYY) is required');
+        return;
+      }
+      if (!gender.trim()) {
+        toast.error('Gender is required');
+        return;
+      }
+      if (!email.trim()) {
+        toast.error('Email is required');
+        return;
+      }
+      if (!occupation.trim()) {
+        toast.error('Occupation is required');
+        return;
+      }
+      if (!country.trim()) {
+        toast.error('Country is required');
+        return;
+      }
+      if (!city.trim()) {
+        toast.error('City is required');
+        return;
+      }
+      if (!streetAddress.trim()) {
+        toast.error('Street address is required');
+        return;
+      }
+      if (!postalCode.trim()) {
+        toast.error('Postal code is required');
+        return;
+      }
+      
+      // Validate province/state for countries that require it
+      const selectedCountry = getCountryByCode(country);
+      if (selectedCountry?.hasProvinces && !provinceState.trim()) {
+        toast.error(`${selectedCountry.regionLabel} is required`);
+        return;
+      }
+      
+      // Validate age is reasonable (13-120 years old)
+      const calculatedAge = calculateAge(birthdate);
+      console.log('DEBUG: Age calculation - birthdate:', birthdate, 'calculatedAge:', calculatedAge, 'type:', typeof calculatedAge);
+      
+      if (calculatedAge === null || calculatedAge === undefined) {
+        toast.error('Invalid birthdate - could not calculate age');
+        return;
+      }
+      
+      if (calculatedAge < 13 || calculatedAge > 120) {
+        toast.error('Age must be between 13 and 120 years');
+        return;
+      }
+      
       // Create VC data structure for certificate
       console.log('Creating VC data structure...');
       let vcData = null;
@@ -474,16 +537,26 @@ export default function Home() {
       // Try to create VC data - if it fails due to missing userDid but we found existing DID, skip VC creation
       try {
         vcData = createIdentityVCData({
-          username,
-          residence,
-          age,
+          firstName,
+          lastName,
+          birthdate,
+          age: calculatedAge,
           gender,
           email,
-          work
+          occupation,
+          country,
+          provinceState,
+          city,
+          streetAddress,
+          postalCode,
+          // Legacy fields for backwards compatibility
+          username: `${firstName} ${lastName}`.trim(),
+          residence: `${city}, ${getCountryByCode(country)?.name || country}`.replace(', ', ', ').trim(),
+          work: occupation
         });
       } catch (vcError) {
         if (existingDidFound && vcError.message.includes('User DID not available')) {
-          console.log('Skipping VC creation since existing DID found but not loaded in context');
+          console.log('[Certificate Generation] Skipping VC creation - existing DID found but not loaded in context (this is expected and handled gracefully)');
           // We'll proceed without VC data, relying on the server to handle existing DID
           vcData = null;
         } else {
@@ -520,17 +593,30 @@ export default function Home() {
       console.log('Using official BSV SDK acquireCertificate for VC certificates...');
       
       const certificateFields = {
-        // Include all fields for backward compatibility and age verification
-        username: username,
-        residence: residence,
-        age: age,  // CRITICAL: This is needed for age verification in whiskey store
+        // New comprehensive fields
+        firstName: firstName,
+        lastName: lastName,
+        birthdate: birthdate,
+        age: calculatedAge,  // CRITICAL: This is needed for age verification in whiskey store
         gender: gender,
         email: email,
-        work: work,
+        occupation: occupation,
+        country: country,
+        provinceState: provinceState,
+        city: city,
+        streetAddress: streetAddress,
+        postalCode: postalCode,
+        // Legacy fields for backwards compatibility
+        username: `${firstName} ${lastName}`.trim(),
+        residence: `${city}, ${getCountryByCode(country)?.name || country}`.replace(', ', ', ').trim(),
+        work: occupation,
         // VC metadata
         isVC: "true",
         didRef: didRef
       };
+      
+      console.log('DEBUG: Certificate fields being sent to server:', certificateFields);
+      console.log('DEBUG: Age field specifically:', { age: certificateFields.age, type: typeof certificateFields.age });
       
       const serverPublicKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4";
       
@@ -667,74 +753,7 @@ export default function Home() {
       // Certificate acquired successfully
       const certResponse = certificateResult;
       
-      /* COMMENTED OUT: Previous working HTTP-based certificate acquisition (from commit 6ec9264)
-      // This bypassed the BSV SDK P2P issues that were causing "Array.from" errors
-      console.log('Using working custom HTTP certificate acquisition to bypass P2P issues...');
       
-      // Get user's identity key for BSV auth
-      const { publicKey: subject } = await wallet.getPublicKey({ identityKey: true });
-      console.log('[VC Cert] User identity key:', subject);
-      
-      // Generate client nonce for replay protection
-      const serverPublicKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4";
-      console.log('[VC Cert] Generating client nonce...');
-      const clientNonce = await createNonce(wallet, serverPublicKey);
-      console.log('[VC Cert] Client nonce generated:', clientNonce?.substring(0, 16) + '...');
-      
-      // Make direct HTTP request to certificate server (working pattern)
-      console.log('[VC Cert] Making request to:', certifierUrl + '/signCertificate');
-      
-      const response = await fetch(certifierUrl + '/signCertificate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-bsv-auth-identity-key': subject  // BSV auth header
-        },
-        body: JSON.stringify({
-          clientNonce: clientNonce,  // Required for replay protection
-          type: Utils.toBase64(Utils.toArray('CommonSource user identity', 'utf8')),
-          fields: certificateFields,
-          acquisitionProtocol: "issuance",  // Required by server
-          certifier: serverPublicKey,
-          certifierUrl: process.env.NEXT_PUBLIC_CERTIFIER_URL || "http://localhost:8080"
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Certificate server responded with ${response.status}: ${response.statusText}`);
-      }
-      
-      // Server returns binary certificate data in BSV SDK format (success byte + certificate binary)
-      const responseBuffer = await response.arrayBuffer();
-      console.log('[VC Cert] Received response buffer, length:', responseBuffer.byteLength);
-      
-      // Parse BSV SDK response format: success_byte + certificate_binary
-      const responseArray = new Uint8Array(responseBuffer);
-      const successByte = responseArray[0];
-      
-      if (successByte !== 0) {
-        throw new Error(`Certificate issuance failed with status code: ${successByte}`);
-      }
-      
-      // Extract the certificate binary data (everything after the success byte)
-      const certificateData = responseArray.slice(1);
-      console.log('[VC Cert] Extracted certificate binary, length:', certificateData.length);
-      
-      // Deserialize the certificate using BSV SDK
-      const certificate = Certificate.fromBinary(certificateData);
-      console.log('[VC Cert] Certificate deserialized successfully:', {
-        type: certificate.type,
-        serialNumber: certificate.serialNumber?.substring(0, 16) + '...',
-        subject: certificate.subject?.substring(0, 16) + '...',
-        certifier: certificate.certifier?.substring(0, 16) + '...'
-      });
-      
-      // Store the certificate in the wallet (this was the missing piece!)
-      await wallet.storeCertificate(certificate);
-      console.log('[VC Cert] Certificate stored in MetaNet Desktop wallet');
-      
-      const certResponse = certificate;  // Use the real certificate object
-      */
       
       // Trigger authentication check to detect the new certificate
       console.log('Triggering authentication check to detect new certificate...');
@@ -890,17 +909,33 @@ export default function Home() {
                   
                   <div className="space-y-2">
                     <Label htmlFor="birthdate">Birthdate</Label>
-                    <Input
-                      id="birthdate"
-                      type="text"
-                      placeholder="DD/MM/YYYY"
-                      value={birthdate}
-                      onChange={(e) => handleBirthdateChange(e.target.value)}
-                      maxLength={10}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="birthdate"
+                        type="text"
+                        placeholder="DD/MM/YYYY"
+                        value={birthdate}
+                        onChange={(e) => handleBirthdateChange(e.target.value)}
+                        maxLength={10}
+                        className="pr-10"
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <svg className="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Enter your date of birth in DD/MM/YYYY format (e.g., 15/03/1990)
+                    </p>
                     {birthdate && validateBirthdate(birthdate) && (
-                      <p className="text-sm text-muted-foreground">
-                        Age: {calculateAge(birthdate)} years
+                      <p className="text-sm text-green-600 font-medium">
+                        Age: {calculateAge(birthdate)} years old
+                      </p>
+                    )}
+                    {birthdate && !validateBirthdate(birthdate) && birthdate.length > 0 && (
+                      <p className="text-sm text-red-600">
+                        Please enter a valid date in DD/MM/YYYY format
                       </p>
                     )}
                   </div>

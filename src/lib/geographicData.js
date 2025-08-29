@@ -483,22 +483,34 @@ export function calculateAge(birthdate) {
 export function formatBirthdate(birthdate) {
   if (!birthdate) return '';
   
-  // Remove any non-numeric characters
-  const cleaned = birthdate.replace(/\D/g, '');
+  // Remove any non-numeric characters except slashes
+  const cleaned = birthdate.replace(/[^\d\/]/g, '');
   
-  // Format as dd/mm/yyyy
-  if (cleaned.length >= 2) {
-    let formatted = cleaned.substring(0, 2);
-    if (cleaned.length >= 4) {
-      formatted += '/' + cleaned.substring(2, 4);
-      if (cleaned.length >= 8) {
-        formatted += '/' + cleaned.substring(4, 8);
+  // Remove extra slashes
+  const withoutExtraSlashes = cleaned.replace(/\/+/g, '/');
+  
+  // Get just the numbers
+  const numbersOnly = withoutExtraSlashes.replace(/\D/g, '');
+  
+  // Format as dd/mm/yyyy with automatic slash insertion
+  let formatted = '';
+  
+  if (numbersOnly.length > 0) {
+    // First two digits (day)
+    formatted = numbersOnly.substring(0, 2);
+    
+    if (numbersOnly.length > 2) {
+      // Add slash after day and next two digits (month)
+      formatted += '/' + numbersOnly.substring(2, 4);
+      
+      if (numbersOnly.length > 4) {
+        // Add slash after month and remaining digits (year, max 4)
+        formatted += '/' + numbersOnly.substring(4, 8);
       }
     }
-    return formatted;
   }
   
-  return cleaned;
+  return formatted;
 }
 
 /**

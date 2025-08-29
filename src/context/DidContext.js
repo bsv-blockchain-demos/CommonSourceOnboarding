@@ -514,6 +514,7 @@ export const DidContextProvider = ({ children, userWallet, userPubKey }) => {
       }
 
       if (!userDid) {
+        console.log('[DidContext] User DID not loaded in context - this is expected when user has existing DID but context not initialized');
         throw new Error('User DID not available - create DID first');
       }
 
