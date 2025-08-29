@@ -43,6 +43,10 @@ export default function Home() {
   const [didCreated, setDidCreated] = useState(false);
   const [existingDidFound, setExistingDidFound] = useState(false);
   const [checkingDid, setCheckingDid] = useState(false);
+  const [autoGeneratingDid, setAutoGeneratingDid] = useState(false);
+  const [autoGenerationFailed, setAutoGenerationFailed] = useState(false);
+  const [hasBdidCert, setHasBdidCert] = useState(false);
+  const [hasBvcCert, setHasBvcCert] = useState(false);
 
   const { createUserDid, createIdentityVCData, userDid, resetInitializationFlag } = useDidContext();
   const { loginWithCertificate } = useAuthContext();
@@ -137,6 +141,86 @@ export default function Home() {
     }
   }, [userWallet]);
 
+  // Reset page-level tracking function
+  const resetPageTracking = useCallback(() => {
+    console.log('[Page] Resetting page-level tracking to allow re-check');
+    hasCheckedExisting.current = false;
+    walletCheckAttempts.current.clear();
+    walletErrorCount.current = 0;
+  }, []);
+
+  // Automatic DID generation function for new users
+  const triggerAutomaticDidGeneration = useCallback(async () => {
+    if (autoGeneratingDid || autoGenerationFailed) return; // Prevent duplicate calls
+
+    console.log('[Page] Starting automatic DID generation...');
+    setAutoGeneratingDid(true);
+    setAutoGenerationFailed(false);
+
+    try {
+      // Check if wallet is available
+      if (!userWallet) {
+        throw new Error('Wallet not connected');
+      }
+
+      // Log the user's identity key to help with funding
+      const identityKey = await userWallet.getPublicKey({ identityKey: true });
+      console.log('[Page] Auto-generation: User wallet identity key (needs funding):', identityKey);
+
+      // Check wallet balance
+      try {
+        const balance = await userWallet.getBalance();
+        console.log('[Page] Auto-generation: User wallet balance:', balance, 'satoshis');
+        if (balance < 10) {
+          toast.error(`Insufficient funds in wallet. Balance: ${balance} satoshis. Please fund your wallet.`);
+          setAutoGenerationFailed(true);
+          return;
+        }
+      } catch (balanceError) {
+        console.log('[Page] Auto-generation: Could not check balance:', balanceError);
+      }
+
+      // Create user DID automatically
+      console.log('[Page] Auto-generation: Creating user DID...');
+      await createUserDid();
+
+      // Reset tracking flags to allow re-discovery of the newly created DID
+      resetInitializationFlag();
+      resetPageTracking();
+
+      // Trigger certificate detection to update UI state
+      try {
+        console.log('[Page] Auto-generation: Detecting newly created DID certificate...');
+        const certStatus = await checkAllCertificates(userWallet);
+        if (certStatus.hasBdidCert) {
+          console.log('[Page] ✅ Auto-generation: DID certificate detected after creation');
+          setExistingDidFound(true);
+          setDidCreated(true);
+          setHasBdidCert(true);
+          
+          toast.success('DID created automatically - you can now fill in your information');
+        } else {
+          console.warn('[Page] Auto-generation: DID created but certificate not detected');
+          setAutoGenerationFailed(true);
+        }
+      } catch (detectionError) {
+        console.warn('[Page] Auto-generation: Certificate detection failed after DID creation:', detectionError);
+        setAutoGenerationFailed(true);
+      }
+
+    } catch (error) {
+      console.error('[Page] Auto-generation: Error creating DID:', error);
+      setAutoGenerationFailed(true);
+      
+      // Only show error toast if it's not a funding issue (already shown above)
+      if (!error.message.includes('funds')) {
+        toast.error(`Automatic DID creation failed: ${error.message}. You can retry manually.`);
+      }
+    } finally {
+      setAutoGeneratingDid(false);
+    }
+  }, [userWallet, autoGeneratingDid, autoGenerationFailed, createUserDid, resetInitializationFlag, resetPageTracking, checkAllCertificates]);
+
   // Simplified certificate detection using comprehensive function
   const checkExistingCertificate = useCallback(async (publicKey) => {
     if (!publicKey || checkingDid) return;
@@ -214,6 +298,8 @@ export default function Home() {
         console.log('[Page] ✅ Found existing certificates - DID:', certStatus.hasBdidCert, 'Identity:', certStatus.hasBvcCert);
         setExistingDidFound(true);
         setDidCreated(certStatus.hasBdidCert); // Only set didCreated if we have a DID cert
+        setHasBdidCert(certStatus.hasBdidCert); // Set new state for conditional UI
+        setHasBvcCert(certStatus.hasBvcCert);   // Set new state for conditional UI
         
         // If we have a Bvc certificate, set it in the context for immediate login
         if (certStatus.hasBvcCert && certStatus.bvcCertificates?.length > 0) {
@@ -226,9 +312,18 @@ export default function Home() {
         walletErrorCount.current = 0;
         walletCheckAttempts.current.delete(attemptKey);
       } else {
-        console.log('[Page] No existing certificates found - user can create new ones');
+        console.log('[Page] No existing certificates found - triggering automatic DID generation');
         setExistingDidFound(false);
         setDidCreated(false);
+        setHasBdidCert(false);
+        setHasBvcCert(false);
+        
+        // Trigger automatic DID generation for new users
+        if (!autoGeneratingDid && !autoGenerationFailed) {
+          console.log('[Page] Starting automatic DID generation for new user...');
+          triggerAutomaticDidGeneration();
+        }
+        
         // Reset attempt tracking on completion (success or no results)
         walletCheckAttempts.current.delete(attemptKey);
       }
@@ -238,7 +333,7 @@ export default function Home() {
     } finally {
       setCheckingDid(false);
     }
-  }, [checkingDid, certificate, userDid, userWallet, checkAllCertificates, setCertificate]);
+  }, [checkingDid, certificate, userDid, userWallet, checkAllCertificates, setCertificate, autoGeneratingDid, autoGenerationFailed, triggerAutomaticDidGeneration]);
 
   // Check for existing certificate when wallet connects (with loop prevention)
   useEffect(() => {
@@ -262,14 +357,6 @@ export default function Home() {
     }
   }, [userWallet, userPubKey, certificate, existingDidFound, checkingDid, checkExistingCertificate]);
   
-  // Reset page-level tracking function
-  const resetPageTracking = useCallback(() => {
-    console.log('[Page] Resetting page-level tracking to allow re-check');
-    hasCheckedExisting.current = false;
-    walletCheckAttempts.current.clear();
-    walletErrorCount.current = 0;
-  }, []);
-
   // Reset check flag when wallet/pubkey changes or certificate is found
   useEffect(() => {
     // Reset when important state changes
@@ -730,81 +817,102 @@ export default function Home() {
               <CardTitle className="text-center">User Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="Enter your username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="residence">Residence</Label>
-                <Input
-                  id="residence"
-                  type="text"
-                  placeholder="Enter your residence"
-                  value={residence}
-                  onChange={(e) => setResidence(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="age">Age</Label>
-                <Input
-                  id="age"
-                  type="number"
-                  placeholder="Enter your age"
-                  value={age}
-                  onChange={(e) => setAge(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="gender">Gender</Label>
-                <Input
-                  id="gender"
-                  type="text"
-                  placeholder="Enter your gender"
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="work">Work</Label>
-                <Input
-                  id="work"
-                  type="text"
-                  placeholder="Enter your work/occupation"
-                  value={work}
-                  onChange={(e) => setWork(e.target.value)}
-                />
-              </div>
+              {/* Show loading message during automatic DID generation */}
+              {autoGeneratingDid && (
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                    <span className="text-blue-700 font-medium">Creating your DID automatically...</span>
+                  </div>
+                  <p className="text-blue-600 text-sm mt-1">Please wait while we set up your digital identity.</p>
+                </div>
+              )}
+              
+              {/* Only show form fields when user has DID certificate or auto-generation is complete */}
+              {(hasBdidCert || didCreated) && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      type="text"
+                      placeholder="Enter your username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="residence">Residence</Label>
+                    <Input
+                      id="residence"
+                      type="text"
+                      placeholder="Enter your residence"
+                      value={residence}
+                      onChange={(e) => setResidence(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="age">Age</Label>
+                    <Input
+                      id="age"
+                      type="number"
+                      placeholder="Enter your age"
+                      value={age}
+                      onChange={(e) => setAge(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gender">Gender</Label>
+                    <Input
+                      id="gender"
+                      type="text"
+                      placeholder="Enter your gender"
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="work">Work</Label>
+                    <Input
+                      id="work"
+                      type="text"
+                      placeholder="Enter your work/occupation"
+                      value={work}
+                      onChange={(e) => setWork(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+              
               <div className="space-y-3 pt-4">
-                <Button
-                  onClick={handleCreateDid}
-                  disabled={didCreated || checkingDid}
-                  variant={didCreated ? "secondary" : "default"}
-                  className="w-full"
-                >
-                  {checkingDid ? 'Checking for existing DID...' : 
-                   existingDidFound ? 'DID Found ✓' : 
-                   didCreated ? 'DID Created ✓' : 'Create DID'}
-                </Button>
+                {/* Conditional Create DID Button Visibility */}
+                {(!hasBdidCert && !autoGeneratingDid && (autoGenerationFailed || checkingDid === false)) && (
+                  <Button
+                    onClick={handleCreateDid}
+                    disabled={didCreated || checkingDid}
+                    variant={didCreated ? "secondary" : "default"}
+                    className="w-full"
+                  >
+                    {checkingDid ? 'Checking for existing DID...' : 
+                     autoGenerationFailed ? 'Retry DID Creation' :
+                     existingDidFound ? 'DID Found ✓' : 
+                     didCreated ? 'DID Created ✓' : 'Create DID'}
+                  </Button>
+                )}
                 <Button
                   onClick={handleGenerateCert}
-                  disabled={!didCreated}
-                  variant={!didCreated ? "secondary" : "default"}
+                  disabled={!hasBdidCert && !didCreated}
+                  variant={(!hasBdidCert && !didCreated) ? "secondary" : "default"}
                   className="w-full"
                 >
                   Generate Certificate
