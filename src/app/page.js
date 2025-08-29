@@ -597,7 +597,7 @@ export default function Home() {
         firstName: firstName,
         lastName: lastName,
         birthdate: birthdate,
-        age: calculatedAge,  // CRITICAL: This is needed for age verification in whiskey store
+        age: calculatedAge.toString(),  // CRITICAL: Convert to string - BSV SDK only handles strings
         gender: gender,
         email: email,
         occupation: occupation,
