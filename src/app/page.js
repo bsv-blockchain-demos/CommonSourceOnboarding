@@ -9,6 +9,7 @@ import {
   getCountryByCode, 
   getProvincesForCountry, 
   calculateAge, 
+  isOver18,
   formatBirthdate, 
   validateBirthdate 
 } from "../lib/geographicData";
@@ -516,17 +517,17 @@ export default function Home() {
         return;
       }
       
-      // Validate age is reasonable (13-120 years old)
-      const calculatedAge = calculateAge(birthdate);
-      console.log('DEBUG: Age calculation - birthdate:', birthdate, 'calculatedAge:', calculatedAge, 'type:', typeof calculatedAge);
+      // Validate user is over 18 (privacy-preserving age verification)
+      const userIsOver18 = isOver18(birthdate);
+      console.log('DEBUG: Over18 check - birthdate:', birthdate, 'isOver18:', userIsOver18, 'type:', typeof userIsOver18);
       
-      if (calculatedAge === null || calculatedAge === undefined) {
-        toast.error('Invalid birthdate - could not calculate age');
+      if (userIsOver18 === null) {
+        toast.error('Invalid birthdate - could not verify age');
         return;
       }
       
-      if (calculatedAge < 13 || calculatedAge > 120) {
-        toast.error('Age must be between 13 and 120 years');
+      if (!userIsOver18) {
+        toast.error('You must be 18 or older to generate a certificate');
         return;
       }
       
@@ -540,7 +541,7 @@ export default function Home() {
           firstName,
           lastName,
           birthdate,
-          age: calculatedAge,
+          over18: userIsOver18,
           gender,
           email,
           occupation,
@@ -597,7 +598,7 @@ export default function Home() {
         firstName: firstName,
         lastName: lastName,
         birthdate: birthdate,
-        age: calculatedAge.toString(),  // CRITICAL: Convert to string - BSV SDK only handles strings
+        over18: userIsOver18.toString(),  // CRITICAL: Convert to string - BSV SDK only handles strings
         gender: gender,
         email: email,
         occupation: occupation,
@@ -616,7 +617,7 @@ export default function Home() {
       };
       
       console.log('DEBUG: Certificate fields being sent to server:', certificateFields);
-      console.log('DEBUG: Age field specifically:', { age: certificateFields.age, type: typeof certificateFields.age });
+      console.log('DEBUG: Over18 field specifically:', { over18: certificateFields.over18, type: typeof certificateFields.over18 });
       
       const serverPublicKey = process.env.NEXT_PUBLIC_SERVER_PUBLIC_KEY || "024c144093f5a2a5f71ce61dce874d3f1ada840446cebdd283b6a8ccfe9e83d9e4";
       

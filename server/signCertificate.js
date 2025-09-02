@@ -120,7 +120,7 @@ export async function signCertificate(req, res) {
 
         console.log('Fields processed, isVC:', decryptedFields?.isVC, 'isDID:', decryptedFields?.isDID);
         console.log('DEBUG: Decrypted fields received by server:', decryptedFields);
-        console.log('DEBUG: Age field specifically:', { age: decryptedFields?.age, type: typeof decryptedFields?.age });
+        console.log('DEBUG: Over18 field specifically:', { over18: decryptedFields?.over18, type: typeof decryptedFields?.over18 });
         
         // Check certificate types
         const isVCCertificate = decryptedFields && decryptedFields.isVC === 'true';
@@ -248,7 +248,7 @@ export async function signCertificate(req, res) {
                     firstName: decryptedFields.firstName || '',
                     lastName: decryptedFields.lastName || '',
                     birthdate: decryptedFields.birthdate || '',
-                    age: decryptedFields.age || '',
+                    over18: decryptedFields.over18 || 'false',
                     gender: decryptedFields.gender || '',
                     email: decryptedFields.email || '',
                     occupation: decryptedFields.occupation || '',

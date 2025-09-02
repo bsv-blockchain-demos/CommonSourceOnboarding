@@ -476,6 +476,17 @@ export function calculateAge(birthdate) {
 }
 
 /**
+ * Check if user is over 18 based on birthdate string - for privacy-preserving age verification
+ * @param {string} birthdate - Birthdate in dd/mm/yyyy format
+ * @returns {boolean|null} - true if over 18, false if under 18, null if invalid birthdate
+ */
+export function isOver18(birthdate) {
+  const age = calculateAge(birthdate);
+  if (age === null) return null;
+  return age >= 18;
+}
+
+/**
  * Format birthdate for display
  * @param {string} birthdate - Raw birthdate string
  * @returns {string} - Formatted as dd/mm/yyyy
